@@ -107,5 +107,7 @@
 //////////////////////////////////
 #define BGF_DECODER
 #define DELTA  3
+#define DELTA_EQ 3
+#define DELTA_EQ_STEP23 0
 #define SLICES (LOG2_MSB(D) + 1)
 

@@ -39,6 +39,7 @@
 #include "decode_internal.h"
 #include "gf2x.h"
 #include "utilities.h"
+#include <stdio.h>
 
 // Decoding (bit-flipping) parameter
 #if defined(BG_DECODER)
@@ -53,9 +54,21 @@
 #  define MAX_IT 5
 #endif
 
-ret_t compute_syndrome(OUT syndrome_t *syndrome,
-                       IN const pad_r_t *c0,
-                       IN const pad_r_t *h0,
+// 对两个数组进行或操作
+// c = ((a | b) | c)
+_INLINE_ void array_or(OUT uint8_t      *c,
+                       IN const uint8_t *a,
+                       IN const uint8_t *b,
+                       IN const uint64_t bytelen)
+{
+  for(uint64_t i = 0; i < bytelen; i++) {
+    c[i] = a[i] | b[i] | c[i];
+  }
+}
+
+ret_t compute_syndrome(OUT syndrome_t      *syndrome,
+                       IN const pad_r_t    *c0,
+                       IN const pad_r_t    *h0,
                        IN const decode_ctx *ctx)
 {
   DEFER_CLEANUP(pad_r_t pad_s, pad_r_cleanup);
@@ -68,11 +81,11 @@ ret_t compute_syndrome(OUT syndrome_t *syndrome,
   return SUCCESS;
 }
 
-_INLINE_ ret_t recompute_syndrome(OUT syndrome_t *syndrome,
-                                  IN const pad_r_t *c0,
-                                  IN const pad_r_t *h0,
-                                  IN const pad_r_t *pk,
-                                  IN const e_t *e,
+_INLINE_ ret_t recompute_syndrome(OUT syndrome_t      *syndrome,
+                                  IN const pad_r_t    *c0,
+                                  IN const pad_r_t    *h0,
+                                  IN const pad_r_t    *pk,
+                                  IN const e_t        *e,
                                   IN const decode_ctx *ctx)
 {
   DEFER_CLEANUP(pad_r_t tmp_c0, pad_r_cleanup);
@@ -111,13 +124,14 @@ _INLINE_ uint8_t get_threshold(IN const syndrome_t *s)
 // Calculate the Unsatisfied Parity Checks (UPCs) and update the errors
 // vector (e) accordingly. In addition, update the black and gray errors vector
 // with the relevant values.
-_INLINE_ void find_err1(OUT e_t *e,
-                        OUT e_t *black_e,
-                        OUT e_t *gray_e,
-                        IN const syndrome_t *          syndrome,
+_INLINE_ void find_err1(OUT e_t                       *e,
+                        OUT e_t                       *black_e,
+                        OUT e_t                       *gray_e,
+                        IN const syndrome_t           *syndrome,
                         IN const compressed_idx_d_ar_t wlist,
                         IN const uint8_t               threshold,
-                        IN const decode_ctx *ctx)
+                        IN const decode_ctx           *ctx,
+                        IN const uint8_t               delat)
 {
   // This function uses the bit-slice-adder methodology of [5]:
   DEFER_CLEANUP(syndrome_t rotated_syndrome = {0}, syndrome_cleanup);
@@ -155,7 +169,7 @@ _INLINE_ void find_err1(OUT e_t *e,
 
     // 4) Calculate the gray error array by adding "DELTA" to the UPC array.
     //    For that we reuse the rotated_syndrome variable setting it to all "1".
-    for(size_t l = 0; l < DELTA; l++) {
+    for(size_t l = 0; l < delat; l++) {
       bike_memset((uint8_t *)rotated_syndrome.qw, 0xff, R_BYTES);
       ctx->bit_sliced_adder(&upc, &rotated_syndrome, SLICES);
     }
@@ -171,12 +185,12 @@ _INLINE_ void find_err1(OUT e_t *e,
 
 // Recalculate the UPCs and update the errors vector (e) according to it
 // and to the black/gray vectors.
-_INLINE_ void find_err2(OUT e_t *e,
-                        IN e_t * pos_e,
-                        IN const syndrome_t *          syndrome,
+_INLINE_ void find_err2(OUT e_t                       *e,
+                        IN e_t                        *pos_e,
+                        IN const syndrome_t           *syndrome,
                         IN const compressed_idx_d_ar_t wlist,
                         IN const uint8_t               threshold,
-                        IN const decode_ctx *ctx)
+                        IN const decode_ctx           *ctx)
 {
   DEFER_CLEANUP(syndrome_t rotated_syndrome = {0}, syndrome_cleanup);
   DEFER_CLEANUP(upc_t upc, upc_cleanup);
@@ -216,8 +230,22 @@ ret_t decode(OUT e_t *e, IN const ct_t *ct, IN const sk_t *sk)
   decode_ctx ctx;
   decode_ctx_init(&ctx);
 
+  // 定义 BGF 译码 delta
+  uint8_t delta = DELTA;
+  // 定义解方程译码 delta
+  uint8_t delta_eq        = DELTA_EQ;
+  uint8_t delta_eq_step23 = DELTA_EQ_STEP23;
+
   DEFER_CLEANUP(e_t black_e = {0}, e_cleanup);
   DEFER_CLEANUP(e_t gray_e = {0}, e_cleanup);
+
+  // 构建用于存放未知数的解方程黑灰集合
+  DEFER_CLEANUP(e_t e_eq = {0}, e_cleanup);
+  DEFER_CLEANUP(e_t black_e_eq = {0}, e_cleanup);
+  DEFER_CLEANUP(e_t gray_e_eq = {0}, e_cleanup);
+
+  // 新建黑灰集合的'或'集合
+  DEFER_CLEANUP(e_t black_or_gray_e = {0}, e_cleanup);
 
   DEFER_CLEANUP(pad_r_t c0 = {0}, pad_r_cleanup);
   DEFER_CLEANUP(pad_r_t h0 = {0}, pad_r_cleanup);
@@ -244,7 +272,18 @@ ret_t decode(OUT e_t *e, IN const ct_t *ct, IN const sk_t *sk)
          r_bits_vector_weight(&e->val[0]) + r_bits_vector_weight(&e->val[1]));
     DMSG("    Weight of syndrome: %lu\n", r_bits_vector_weight((r_t *)s.qw));
 
-    find_err1(e, &black_e, &gray_e, &s, sk->wlist, threshold, &ctx);
+    // 获取解方程的未知数黑灰集合
+    find_err1(&e_eq, &black_e_eq, &gray_e_eq, &s, sk->wlist, threshold, &ctx,
+              delta_eq);
+
+    find_err1(e, &black_e, &gray_e, &s, sk->wlist, threshold, &ctx, delta);
+
+    // 将获取的黑集合与灰集合'或'操作
+    for(uint8_t i = 0; i < N0; i++) {
+      array_or((uint8_t *)&black_or_gray_e.val[i].raw, black_e_eq.val[i].raw,
+               gray_e_eq.val[i].raw, R_BYTES);
+    }
+
     GUARD(recompute_syndrome(&s, &c0, &h0, &pk, e, &ctx));
 #if defined(BGF_DECODER)
     if(iter >= 1) {
@@ -254,6 +293,16 @@ ret_t decode(OUT e_t *e, IN const ct_t *ct, IN const sk_t *sk)
     DMSG("    Weight of e: %lu\n",
          r_bits_vector_weight(&e->val[0]) + r_bits_vector_weight(&e->val[1]));
     DMSG("    Weight of syndrome: %lu\n", r_bits_vector_weight((r_t *)s.qw));
+
+    // 选取 step23 的黑灰集合
+    find_err1(&e_eq, &black_e_eq, &gray_e_eq, &s, sk->wlist, threshold, &ctx,
+              delta_eq_step23);
+
+    // 将获取的黑集合与灰集合'或'操作
+    for(uint8_t i = 0; i < N0; i++) {
+      array_or((uint8_t *)&black_or_gray_e.val[i].raw, black_e_eq.val[i].raw,
+               gray_e_eq.val[i].raw, R_BYTES);
+    }
 
     find_err2(e, &black_e, &s, sk->wlist, ((D + 1) / 2) + 1, &ctx);
     GUARD(recompute_syndrome(&s, &c0, &h0, &pk, e, &ctx));
@@ -266,9 +315,28 @@ ret_t decode(OUT e_t *e, IN const ct_t *ct, IN const sk_t *sk)
     GUARD(recompute_syndrome(&s, &c0, &h0, &pk, e, &ctx));
   }
 
+  // 译码失败返回错误
   if(r_bits_vector_weight((r_t *)s.qw) > 0) {
     BIKE_ERROR(E_DECODING_FAILURE);
   }
+
+  // ===========================如果译码失败则加入方程组求解算法===============================
+
+  // --------------------- 1.构建方程组 ---------------------
+
+  // 新建 b 常数
+  DEFER_CLEANUP(pad_r_t b = {0}, pad_r_cleanup);
+
+  // 将 c0 和 h0 相乘得到方程右边的增广 b 常数
+  gf2x_mod_mul(&b, &c0, &h0);
+
+  // 获取未知数的个数
+  uint32_t x_weight = r_bits_vector_weight((r_t *)black_or_gray_e.val[0].raw) + r_bits_vector_weight((r_t *)black_or_gray_e.val[0].raw);
+
+  printf("\n未知数个数: %u\n",x_weight);
+
+  // TODO
+
 
   return SUCCESS;
 }
