@@ -54,6 +54,77 @@
 #  define MAX_IT 5
 #endif
 
+#define GUSS_BLOCK  8
+#define X_COUNT_MIN 1500
+
+// 利用解出来的 b 和 ct 还原 fm(ct_verify)
+_INLINE_ void solving_equations_mf(IN OUT e_t *ct_verify, IN uint32_t b[])
+{
+  // 放 0 用 '与', 放 1 用 '或'
+  // 定义 11111111 和 00000001 用于计算
+  uint8_t mask_255 = 255;
+  uint8_t mask_1   = 1;
+  int     bit_u    = 8;
+  // 对第一组操作
+  for(int i_v = 0; i_v < R_BITS; i_v++) {
+    if(b[i_v] != 0) {
+      b[i_v] = b[i_v] % 2;
+      if(b[i_v] == 0) {
+        // 用与操作
+        ct_verify->val[0].raw[i_v / bit_u] =
+          (mask_255 ^ (mask_1 << (i_v % bit_u))) &
+          ct_verify->val[0].raw[i_v / bit_u];
+      } else {
+        // 用或操作
+        ct_verify->val[0].raw[i_v / bit_u] =
+          (mask_1 << (i_v % bit_u)) | ct_verify->val[0].raw[i_v / bit_u];
+      }
+    }
+  }
+  // 对第二组操作
+  for(int i_v = R_BITS; i_v < 2 * R_BITS; i_v++) {
+    if(b[i_v] != 0) {
+      b[i_v] = b[i_v] % 2;
+      if(b[i_v] == 0) {
+        // 用与操作
+        ct_verify->val[1].raw[(i_v - R_BITS) / bit_u] =
+          (mask_255 ^ (mask_1 << ((i_v - R_BITS) % bit_u))) &
+          ct_verify->val[1].raw[(i_v - R_BITS) / bit_u];
+      } else {
+        // 用或操作
+        ct_verify->val[1].raw[(i_v - R_BITS) / bit_u] =
+          (mask_1 << ((i_v - R_BITS) % bit_u)) |
+          ct_verify->val[1].raw[(i_v - R_BITS) / bit_u];
+      }
+    }
+  }
+}
+
+// 8 位异或
+_INLINE_ ret_t xor_8(OUT uint8_t      *res,
+                     IN const uint8_t *a,
+                     IN const uint8_t *b,
+                     IN const uint64_t bytelen,
+                     IN const uint64_t r_bytelen)
+{
+  for(uint64_t i = r_bytelen; i < bytelen; i++) {
+    res[i] = a[i] ^ b[i];
+  }
+  return SUCCESS;
+}
+
+// 用于交换两个数组
+_INLINE_ void
+swap(OUT uint8_t *a, OUT uint8_t *b, uint32_t eq_j, uint32_t guss_j_num)
+{
+  uint8_t tmp_guss[guss_j_num];
+  for(uint32_t change_i = eq_j; change_i < guss_j_num; change_i++) {
+    tmp_guss[change_i] = a[change_i];
+    a[change_i]        = b[change_i];
+    b[change_i]        = tmp_guss[change_i];
+  }
+}
+
 // 对两个数组进行或操作
 // c = ((a | b) | c)
 _INLINE_ void array_or(OUT uint8_t      *c,
@@ -295,8 +366,8 @@ ret_t decode(OUT e_t *e, IN const ct_t *ct, IN const sk_t *sk)
     DMSG("    Weight of syndrome: %lu\n", r_bits_vector_weight((r_t *)s.qw));
 
     // 选取 step23 的黑灰集合
-    find_err1(&e_eq, &black_e_eq, &gray_e_eq, &s, sk->wlist, threshold, &ctx,
-              delta_eq_step23);
+    find_err1(&e_eq, &black_e_eq, &gray_e_eq, &s, sk->wlist, ((D + 1) / 2) + 1,
+              &ctx, delta_eq_step23);
 
     // 将获取的黑集合与灰集合'或'操作
     for(uint8_t i = 0; i < N0; i++) {
@@ -315,28 +386,186 @@ ret_t decode(OUT e_t *e, IN const ct_t *ct, IN const sk_t *sk)
     GUARD(recompute_syndrome(&s, &c0, &h0, &pk, e, &ctx));
   }
 
-  // 译码失败返回错误
-  if(r_bits_vector_weight((r_t *)s.qw) > 0) {
-    BIKE_ERROR(E_DECODING_FAILURE);
-  }
-
-  // ===========================如果译码失败则加入方程组求解算法===============================
+  // ===========================进行方程组求解算法===============================
 
   // --------------------- 1.构建方程组 ---------------------
 
   // 新建 b 常数
   DEFER_CLEANUP(pad_r_t b = {0}, pad_r_cleanup);
+  // 新建 sk 的转置
+  sk_t sk_transpose = {0};
 
   // 将 c0 和 h0 相乘得到方程右边的增广 b 常数
   gf2x_mod_mul(&b, &c0, &h0);
 
+  // 填充未知数个数为固定值
+  uint32_t x_count_pad =
+    (X_COUNT_MIN - (r_bits_vector_weight((r_t *)black_or_gray_e.val[0].raw) +
+                    r_bits_vector_weight((r_t *)black_or_gray_e.val[1].raw))) /
+    8;
+
+  for(uint32_t i_x_count = 0; i_x_count < x_count_pad / 2 + 1; i_x_count++) {
+    black_or_gray_e.val[0].raw[i_x_count] = 255;
+    black_or_gray_e.val[1].raw[i_x_count] = 255;
+  }
+
   // 获取未知数的个数
-  uint32_t x_weight = r_bits_vector_weight((r_t *)black_or_gray_e.val[0].raw) + r_bits_vector_weight((r_t *)black_or_gray_e.val[0].raw);
+  uint32_t x_weight = r_bits_vector_weight((r_t *)black_or_gray_e.val[0].raw) +
+                      r_bits_vector_weight((r_t *)black_or_gray_e.val[1].raw);
 
-  printf("\n未知数个数: %u\n",x_weight);
+  // printf("\n未知数个数: %u\n", x_weight);
 
-  // TODO
+  // 构造 sk 转置 sk_transpose, 获取 sk 转置的首行索引
+  // 𝜑(A)' = a0 + ar-1X + ar-2X^2 ...
+  for(uint8_t i = 0; i < N0; i++) {
+    for(uint8_t i_DV = 0; i_DV < D; i_DV++) {
+      if(sk->wlist[i].val[i_DV] != 0) {
+        sk_transpose.wlist[i].val[i_DV] = R_BITS - sk->wlist[i].val[i_DV];
+      } else {
+        sk_transpose.wlist[i].val[i_DV] = sk->wlist[i].val[i_DV];
+      }
+    }
+  }
 
+  // 对方程组未知数进行构建，将 x0-xall 的对应关系列出来
+  // black_or_gray_e 的每个位置对应 旋转 h 的位置满足 (e+r-h) % r
+  // 对每个 black_or_gray_e 进行 and 寻找是否存在未知数
+  // guss_j_num 最后一个字用来存储 b
+
+  uint32_t guss_j_num = 0;
+  if(x_weight % GUSS_BLOCK == 0) {
+    guss_j_num = x_weight / GUSS_BLOCK + 1;
+  } else {
+    guss_j_num = x_weight / GUSS_BLOCK + 2;
+  }
+  uint8_t equations_guss_byte[R_BITS][guss_j_num];
+  memset(equations_guss_byte, 0, sizeof(equations_guss_byte));
+
+  uint8_t  mask_e       = 1;
+  uint8_t  mask_e_byte  = 1;
+  uint32_t e_count      = 0;
+  uint32_t e_index      = 0;
+  uint32_t e_index_byte = 0;
+  // 保存每个 x 对应的位置
+  uint32_t x_arr[x_weight];
+  memset(x_arr, 0, sizeof(x_arr));
+
+  // 填充 equations_guss_byte
+  for(uint8_t i = 0; i < N0; i++) {
+    for(uint32_t i_e_x = 0; i_e_x < R_BITS; i_e_x++) {
+      if(i_e_x % GUSS_BLOCK == 0) {
+        mask_e  = 1;
+        e_index = i_e_x / GUSS_BLOCK;
+      }
+      if((mask_e & black_or_gray_e.val[i].raw[e_index]) != 0) {
+        if(e_count % GUSS_BLOCK == 0) {
+          mask_e_byte  = 1;
+          e_index_byte = e_count / GUSS_BLOCK;
+        }
+        uint32_t e_add_R = i_e_x + R_BITS;
+        x_arr[e_count]   = i_e_x + i * R_BITS;
+        e_count += 1;
+        // 根据 e 的和 h 的位置来确定 equations_guss_byte 的构建 (e+r-h) % r
+        for(uint32_t wlist_i = 0; wlist_i < D; wlist_i++) {
+          equations_guss_byte[(e_add_R - sk_transpose.wlist[i].val[wlist_i]) %
+                              R_BITS][e_index_byte] += mask_e_byte;
+        }
+        mask_e_byte <<= 1;
+      }
+      mask_e <<= 1;
+    }
+  }
+
+  // equations_guss_byte 最后加入常数列
+  for(uint32_t i = 0; i < R_BYTES - 1; i++) {
+    for(uint8_t index = 0, location = 1; location != 0; location <<= 1) {
+      if((b.val.raw[i] & location) != 0) {
+        equations_guss_byte[8 * i + index][guss_j_num - 1] = 1;
+      }
+      index++;
+    }
+  }
+  // 处理溢出位
+  for(uint8_t index = 0, location = 1; location <= MASK(LAST_R_BYTE_LEAD);
+      location <<= 1) {
+    if((b.val.raw[R_BYTES - 1] & location) != 0) {
+      equations_guss_byte[8 * (R_BYTES - 1) + index][guss_j_num - 1] = 1;
+    }
+    index++;
+  }
+
+  // =================guss 解方程==================
+
+  // 设置 x 主元表
+  uint8_t guss_x_main[R_BITS] = {0};
+  // 开始消元
+  for(uint32_t guss_j = 0; guss_j < x_weight; guss_j++) {
+    uint8_t  mask_1    = 1;
+    uint8_t  mask_guss = (mask_1 << (guss_j % GUSS_BLOCK));
+    uint32_t eq_j      = guss_j / GUSS_BLOCK;
+    for(uint32_t guss_i = guss_j; guss_i < R_BITS; guss_i++) {
+      if((mask_guss & equations_guss_byte[guss_i][eq_j]) != 0) {
+        if(guss_x_main[guss_j] == 0) {
+          // 如果此列没有主元优先挑选主元
+          // 将此行作为当前列主元，交换第一行并继续向后消元
+          guss_x_main[guss_j] = 1;
+          swap(equations_guss_byte[guss_j], equations_guss_byte[guss_i], eq_j,
+               guss_j_num);
+        } else {
+          // 使用第 guss_j 行消此行
+          GUARD(xor_8(equations_guss_byte[guss_i], equations_guss_byte[guss_i],
+                      equations_guss_byte[guss_j], guss_j_num, eq_j));
+        }
+      }
+    }
+  }
+  // 倒着求解
+  for(int guss_j = x_weight - 1; guss_j >= 0; guss_j--) {
+    uint32_t eq_j = guss_j / GUSS_BLOCK;
+    for(uint32_t guss_i = guss_j; guss_i > 0; guss_i--) {
+      if((equations_guss_byte[guss_j][eq_j] &
+          equations_guss_byte[guss_i - 1][eq_j]) != 0) {
+        equations_guss_byte[guss_i - 1][eq_j] ^=
+          equations_guss_byte[guss_j][eq_j];
+        equations_guss_byte[guss_i - 1][guss_j_num - 1] ^=
+          equations_guss_byte[guss_j][guss_j_num - 1];
+      }
+    }
+  }
+
+  // 验证解方程正确性===================
+  // 构造高斯消元解数组
+  uint32_t x[2 * R_BITS] = {0};
+  for(uint32_t i = 0; i < x_weight; i++) {
+    if(equations_guss_byte[i][guss_j_num - 1] == 0) {
+      x[x_arr[i]] = 2;
+    } else {
+      x[x_arr[i]] = 1;
+    }
+  }
+
+  // 构造验证 e
+  e_t e_v = {0};
+  solving_equations_mf((e_t *)&e_v, x);
+
+  DEFER_CLEANUP(syndrome_t s_v = {0}, syndrome_cleanup);
+
+  GUARD(recompute_syndrome(&s_v, &c0, &h0, &pk, &e_v, &ctx));
+
+  // 解方程失败则输出错误
+  if(r_bits_vector_weight((r_t *)s_v.qw) > 0) {
+    // printf("\n解方程失败\n");
+  } else {
+    // printf("\n解方程成功\n");
+  }
+
+  // 译码失败返回错误
+  if(r_bits_vector_weight((r_t *)s.qw) > 0) {
+    // printf("\nBGF译码失败\n");
+    BIKE_ERROR(E_DECODING_FAILURE);
+  }
+
+  // printf("\nBGF译码成功\n");
 
   return SUCCESS;
 }

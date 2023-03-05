@@ -20,7 +20,7 @@
 
 #if(LEVEL == 1)
 // 64-bits of post-quantum security parameters (BIKE spec):
-#  define R_BITS 12323
+#  define R_BITS 12323 // 12323
 #  define D      71
 #  define T      134
 
@@ -107,7 +107,7 @@
 //////////////////////////////////
 #define BGF_DECODER
 #define DELTA  3
-#define DELTA_EQ 3
+#define DELTA_EQ 9
 #define DELTA_EQ_STEP23 0
 #define SLICES (LOG2_MSB(D) + 1)
 
