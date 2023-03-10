@@ -365,7 +365,7 @@ ret_t decode(OUT e_t *e, IN const ct_t *ct, IN const sk_t *sk)
          r_bits_vector_weight(&e->val[0]) + r_bits_vector_weight(&e->val[1]));
     DMSG("    Weight of syndrome: %lu\n", r_bits_vector_weight((r_t *)s.qw));
 
-    // 选取 step23 的黑灰集合
+    // 选取 step2 的黑灰集合
     find_err1(&e_eq, &black_e_eq, &gray_e_eq, &s, sk->wlist, ((D + 1) / 2) + 1,
               &ctx, delta_eq_step23);
 
@@ -381,6 +381,16 @@ ret_t decode(OUT e_t *e, IN const ct_t *ct, IN const sk_t *sk)
     DMSG("    Weight of e: %lu\n",
          r_bits_vector_weight(&e->val[0]) + r_bits_vector_weight(&e->val[1]));
     DMSG("    Weight of syndrome: %lu\n", r_bits_vector_weight((r_t *)s.qw));
+
+    // 选取 step3 的黑灰集合
+    find_err1(&e_eq, &black_e_eq, &gray_e_eq, &s, sk->wlist, ((D + 1) / 2) + 1,
+              &ctx, delta_eq_step23);
+
+    // 将获取的黑集合与灰集合'或'操作
+    for(uint8_t i = 0; i < N0; i++) {
+      array_or((uint8_t *)&black_or_gray_e.val[i].raw, black_e_eq.val[i].raw,
+               gray_e_eq.val[i].raw, R_BYTES);
+    }
 
     find_err2(e, &gray_e, &s, sk->wlist, ((D + 1) / 2) + 1, &ctx);
     GUARD(recompute_syndrome(&s, &c0, &h0, &pk, e, &ctx));
@@ -398,16 +408,16 @@ ret_t decode(OUT e_t *e, IN const ct_t *ct, IN const sk_t *sk)
   // 将 c0 和 h0 相乘得到方程右边的增广 b 常数
   gf2x_mod_mul(&b, &c0, &h0);
 
-  // 填充未知数个数为固定值
-  uint32_t x_count_pad =
-    (X_COUNT_MIN - (r_bits_vector_weight((r_t *)black_or_gray_e.val[0].raw) +
-                    r_bits_vector_weight((r_t *)black_or_gray_e.val[1].raw))) /
-    8;
+  // // 填充未知数个数为固定值
+  // uint32_t x_count_pad =
+  //   (X_COUNT_MIN - (r_bits_vector_weight((r_t *)black_or_gray_e.val[0].raw) +
+  //                   r_bits_vector_weight((r_t *)black_or_gray_e.val[1].raw))) /
+  //   8;
 
-  for(uint32_t i_x_count = 0; i_x_count < x_count_pad / 2 + 1; i_x_count++) {
-    black_or_gray_e.val[0].raw[i_x_count] = 255;
-    black_or_gray_e.val[1].raw[i_x_count] = 255;
-  }
+  // for(uint32_t i_x_count = 0; i_x_count < x_count_pad / 2 + 1; i_x_count++) {
+  //   black_or_gray_e.val[0].raw[i_x_count] = 255;
+  //   black_or_gray_e.val[1].raw[i_x_count] = 255;
+  // }
 
   // 获取未知数的个数
   uint32_t x_weight = r_bits_vector_weight((r_t *)black_or_gray_e.val[0].raw) +
