@@ -22,7 +22,7 @@
 // 64-bits of post-quantum security parameters (BIKE spec):
 #  define R_BITS 12323 // 12323
 #  define D      71
-#  define T      134
+#  define T_BIKE      134
 
 #  define THRESHOLD_COEFF0 13.530
 #  define THRESHOLD_COEFF1 0.0069722

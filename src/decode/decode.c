@@ -40,6 +40,8 @@
 #include "gf2x.h"
 #include "utilities.h"
 #include <stdio.h>
+#include <time.h>
+#include <m4ri/m4ri.h>
 
 // Decoding (bit-flipping) parameter
 #if defined(BG_DECODER)
@@ -55,7 +57,7 @@
 #endif
 
 #define GUSS_BLOCK  8
-#define X_COUNT_MIN 1500
+#define X_COUNT_MIN 1000
 
 // 利用解出来的 b 和 ct 还原 fm(ct_verify)
 _INLINE_ void solving_equations_mf(IN OUT e_t *ct_verify, IN uint32_t b[])
@@ -398,7 +400,15 @@ ret_t decode(OUT e_t *e, IN const ct_t *ct, IN const sk_t *sk)
 
   // ===========================进行方程组求解算法===============================
 
+  clock_t start_1;
+  clock_t end_1;
+  clock_t start_2;
+  clock_t end_2;
+  clock_t start_3;
+  clock_t end_3;
+
   // --------------------- 1.构建方程组 ---------------------
+  start_3 = clock();   
 
   // 新建 b 常数
   DEFER_CLEANUP(pad_r_t b = {0}, pad_r_cleanup);
@@ -408,16 +418,16 @@ ret_t decode(OUT e_t *e, IN const ct_t *ct, IN const sk_t *sk)
   // 将 c0 和 h0 相乘得到方程右边的增广 b 常数
   gf2x_mod_mul(&b, &c0, &h0);
 
-  // // 填充未知数个数为固定值
-  // uint32_t x_count_pad =
-  //   (X_COUNT_MIN - (r_bits_vector_weight((r_t *)black_or_gray_e.val[0].raw) +
-  //                   r_bits_vector_weight((r_t *)black_or_gray_e.val[1].raw))) /
-  //   8;
+  // 填充未知数个数为固定值
+  uint32_t x_count_pad =
+    (X_COUNT_MIN - (r_bits_vector_weight((r_t *)black_or_gray_e.val[0].raw) +
+                    r_bits_vector_weight((r_t *)black_or_gray_e.val[1].raw))) /
+    8;
 
-  // for(uint32_t i_x_count = 0; i_x_count < x_count_pad / 2 + 1; i_x_count++) {
-  //   black_or_gray_e.val[0].raw[i_x_count] = 255;
-  //   black_or_gray_e.val[1].raw[i_x_count] = 255;
-  // }
+  for(uint32_t i_x_count = 0; i_x_count < x_count_pad / 2 + 1; i_x_count++) {
+    black_or_gray_e.val[0].raw[i_x_count] = 255;
+    black_or_gray_e.val[1].raw[i_x_count] = 255;
+  }
 
   // 获取未知数的个数
   uint32_t x_weight = r_bits_vector_weight((r_t *)black_or_gray_e.val[0].raw) +
@@ -477,8 +487,8 @@ ret_t decode(OUT e_t *e, IN const ct_t *ct, IN const sk_t *sk)
         e_count += 1;
         // 根据 e 的和 h 的位置来确定 equations_guss_byte 的构建 (e+r-h) % r
         for(uint32_t wlist_i = 0; wlist_i < D; wlist_i++) {
-          equations_guss_byte[(e_add_R - sk_transpose.wlist[i].val[wlist_i]) %
-                              R_BITS][e_index_byte] += mask_e_byte;
+          equations_guss_byte[(e_add_R - sk_transpose.wlist[i].val[wlist_i]) % 
+          R_BITS][e_index_byte] += mask_e_byte;
         }
         mask_e_byte <<= 1;
       }
@@ -503,6 +513,61 @@ ret_t decode(OUT e_t *e, IN const ct_t *ct, IN const sk_t *sk)
     }
     index++;
   }
+
+  end_3 = clock();        
+  printf("\t 构建 took %lfs\n", ((double)(end_3 - start_3) / CLOCKS_PER_SEC));
+
+  // ===================================== m4ri 解方程
+  // 求解 AX=B
+  // 构造 A B
+  mzd_t *A = mzd_init(R_BITS,x_weight);
+  mzd_t *B = mzd_init(R_BITS,1);
+  // 给 A 填充信息
+  wi_t const width_A    = A->width - 1;
+  word const mask_end_A = A->high_bitmask;
+  for (rci_t i = 0; i < A->nrows; ++i) {
+    word *row = mzd_row(A, i);
+    for (wi_t j = 0; j < width_A; ++j) row[j] = ((uint64_t*)(equations_guss_byte[i]))[j];
+    row[width_A] ^= (row[width_A] ^ ((uint64_t*)equations_guss_byte[i])[width_A]) & mask_end_A;
+  }
+  __M4RI_DD_MZD(A);
+
+  // 给 B 填充信息
+  wi_t const width_B    = B->width - 1;
+  word const mask_end_B = B->high_bitmask;
+  for (rci_t i = 0; i < B->nrows; ++i) {
+    word *row = mzd_row(B, i);
+    for (wi_t j = 0; j < width_B; ++j) row[j] = ((uint64_t*)(equations_guss_byte[i]))[width_A + 1];
+    row[width_B] ^= (row[width_B] ^ ((uint64_t*)equations_guss_byte[i])[width_A + 1]) & mask_end_B;
+  }
+  __M4RI_DD_MZD(B);
+
+  // printf("x_weight %u\n", x_weight);
+  // printf("width_A %lu\n", width_A);
+  // printf("guss_j_num %u\n", guss_j_num);
+  // mzd_print(B);
+
+
+  clock_t start_m;
+  clock_t end_m;
+  start_m = clock(); 
+  int consistency = mzd_solve_left(A, B, 0, 1);
+  end_m = clock();      
+  printf("\t m4ri 求解 took %lfs\n", ((double)(end_m - start_m) / CLOCKS_PER_SEC));
+
+  if (consistency == -1) {
+    printf("failed (solution should have been found)\n");
+  }else{
+    printf("m4ri 求解成功\n");
+  }
+
+  // ====================================================
+
+
+
+
+
+  start_1 = clock();      
 
   // =================guss 解方程==================
 
@@ -529,6 +594,12 @@ ret_t decode(OUT e_t *e, IN const ct_t *ct, IN const sk_t *sk)
       }
     }
   }
+
+  end_1 = clock();        
+  printf("\t guss 消除 took %lfs\n", ((double)(end_1 - start_1) / CLOCKS_PER_SEC));
+
+  start_2 = clock();
+  
   // 倒着求解
   for(int guss_j = x_weight - 1; guss_j >= 0; guss_j--) {
     uint32_t eq_j = guss_j / GUSS_BLOCK;
@@ -543,6 +614,9 @@ ret_t decode(OUT e_t *e, IN const ct_t *ct, IN const sk_t *sk)
     }
   }
 
+  end_2 = clock();        
+  printf("\t guss 求解 took %lfs\n", ((double)(end_2 - start_2) / CLOCKS_PER_SEC));
+
   // 验证解方程正确性===================
   // 构造高斯消元解数组
   uint32_t x[2 * R_BITS] = {0};
@@ -554,6 +628,19 @@ ret_t decode(OUT e_t *e, IN const ct_t *ct, IN const sk_t *sk)
     }
   }
 
+  // mzd_print_row(A,1);
+
+  // // 验证解方程正确性===================
+  // // 构造高斯消元解数组
+  // uint32_t x[2 * R_BITS] = {0};
+  // for(uint32_t i = 0; i < x_weight; i++) {
+  //   if(equations_guss_byte[i][guss_j_num - 1] == 0) {
+  //     x[x_arr[i]] = 2;
+  //   } else {
+  //     x[x_arr[i]] = 1;
+  //   }
+  // }
+
   // 构造验证 e
   e_t e_v = {0};
   solving_equations_mf((e_t *)&e_v, x);
@@ -564,18 +651,18 @@ ret_t decode(OUT e_t *e, IN const ct_t *ct, IN const sk_t *sk)
 
   // 解方程失败则输出错误
   if(r_bits_vector_weight((r_t *)s_v.qw) > 0) {
-    // printf("\n解方程失败\n");
+    printf("\n解方程失败\n");
   } else {
-    // printf("\n解方程成功\n");
+    printf("\n解方程成功\n");
   }
 
   // 译码失败返回错误
   if(r_bits_vector_weight((r_t *)s.qw) > 0) {
-    // printf("\nBGF译码失败\n");
+    printf("\nBGF译码失败\n");
     BIKE_ERROR(E_DECODING_FAILURE);
   }
 
-  // printf("\nBGF译码成功\n");
+  printf("\nBGF译码成功\n");
 
   return SUCCESS;
 }
