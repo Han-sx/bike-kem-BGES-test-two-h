@@ -39,9 +39,9 @@
 #include "decode_internal.h"
 #include "gf2x.h"
 #include "utilities.h"
+#include <m4ri/m4ri.h>
 #include <stdio.h>
 #include <time.h>
-#include <m4ri/m4ri.h>
 
 // Decoding (bit-flipping) parameter
 #if defined(BG_DECODER)
@@ -56,8 +56,8 @@
 #  define MAX_IT 5
 #endif
 
-#define GUSS_BLOCK  8
-#define X_COUNT_MIN 1000
+#define GUSS_BLOCK  64
+#define X_COUNT_MIN 7000
 
 // 利用解出来的 b 和 ct 还原 fm(ct_verify)
 _INLINE_ void solving_equations_mf(IN OUT e_t *ct_verify, IN uint32_t b[])
@@ -103,11 +103,11 @@ _INLINE_ void solving_equations_mf(IN OUT e_t *ct_verify, IN uint32_t b[])
 }
 
 // 8 位异或
-_INLINE_ ret_t xor_8(OUT uint8_t      *res,
-                     IN const uint8_t *a,
-                     IN const uint8_t *b,
-                     IN const uint64_t bytelen,
-                     IN const uint64_t r_bytelen)
+_INLINE_ ret_t xor_8(OUT uint64_t      *res,
+                     IN const uint64_t *a,
+                     IN const uint64_t *b,
+                     IN const uint64_t  bytelen,
+                     IN const uint64_t  r_bytelen)
 {
   for(uint64_t i = r_bytelen; i < bytelen; i++) {
     res[i] = a[i] ^ b[i];
@@ -117,9 +117,9 @@ _INLINE_ ret_t xor_8(OUT uint8_t      *res,
 
 // 用于交换两个数组
 _INLINE_ void
-swap(OUT uint8_t *a, OUT uint8_t *b, uint32_t eq_j, uint32_t guss_j_num)
+swap(OUT uint64_t *a, OUT uint64_t *b, uint32_t eq_j, uint32_t guss_j_num)
 {
-  uint8_t tmp_guss[guss_j_num];
+  uint64_t tmp_guss[guss_j_num];
   for(uint32_t change_i = eq_j; change_i < guss_j_num; change_i++) {
     tmp_guss[change_i] = a[change_i];
     a[change_i]        = b[change_i];
@@ -400,15 +400,11 @@ ret_t decode(OUT e_t *e, IN const ct_t *ct, IN const sk_t *sk)
 
   // ===========================进行方程组求解算法===============================
 
-  clock_t start_1;
-  clock_t end_1;
-  clock_t start_2;
-  clock_t end_2;
-  clock_t start_3;
-  clock_t end_3;
+  // clock_t start_3;
+  // clock_t end_3;
 
   // --------------------- 1.构建方程组 ---------------------
-  start_3 = clock();   
+  // start_3 = clock();
 
   // 新建 b 常数
   DEFER_CLEANUP(pad_r_t b = {0}, pad_r_cleanup);
@@ -458,11 +454,11 @@ ret_t decode(OUT e_t *e, IN const ct_t *ct, IN const sk_t *sk)
   } else {
     guss_j_num = x_weight / GUSS_BLOCK + 2;
   }
-  uint8_t equations_guss_byte[R_BITS][guss_j_num];
+  uint64_t equations_guss_byte[R_BITS][guss_j_num];
   memset(equations_guss_byte, 0, sizeof(equations_guss_byte));
 
   uint8_t  mask_e       = 1;
-  uint8_t  mask_e_byte  = 1;
+  uint64_t mask_e_byte  = 1;
   uint32_t e_count      = 0;
   uint32_t e_index      = 0;
   uint32_t e_index_byte = 0;
@@ -473,9 +469,9 @@ ret_t decode(OUT e_t *e, IN const ct_t *ct, IN const sk_t *sk)
   // 填充 equations_guss_byte
   for(uint8_t i = 0; i < N0; i++) {
     for(uint32_t i_e_x = 0; i_e_x < R_BITS; i_e_x++) {
-      if(i_e_x % GUSS_BLOCK == 0) {
+      if(i_e_x % 8 == 0) {
         mask_e  = 1;
-        e_index = i_e_x / GUSS_BLOCK;
+        e_index = i_e_x / 8;
       }
       if((mask_e & black_or_gray_e.val[i].raw[e_index]) != 0) {
         if(e_count % GUSS_BLOCK == 0) {
@@ -487,8 +483,8 @@ ret_t decode(OUT e_t *e, IN const ct_t *ct, IN const sk_t *sk)
         e_count += 1;
         // 根据 e 的和 h 的位置来确定 equations_guss_byte 的构建 (e+r-h) % r
         for(uint32_t wlist_i = 0; wlist_i < D; wlist_i++) {
-          equations_guss_byte[(e_add_R - sk_transpose.wlist[i].val[wlist_i]) % 
-          R_BITS][e_index_byte] += mask_e_byte;
+          equations_guss_byte[(e_add_R - sk_transpose.wlist[i].val[wlist_i]) %
+                              R_BITS][e_index_byte] += mask_e_byte;
         }
         mask_e_byte <<= 1;
       }
@@ -514,155 +510,89 @@ ret_t decode(OUT e_t *e, IN const ct_t *ct, IN const sk_t *sk)
     index++;
   }
 
-  end_3 = clock();        
-  printf("\t 构建 took %lfs\n", ((double)(end_3 - start_3) / CLOCKS_PER_SEC));
+  // end_3 = clock();
+  // printf("\t 构建 took %lfs\n", ((double)(end_3 - start_3) / CLOCKS_PER_SEC));
 
-  // ===================================== m4ri 解方程
+  // ===================================== m4ri 解方程 ==========================
+
+  // clock_t start_m;
+  // clock_t end_m;
+  // start_m = clock();
   // 求解 AX=B
   // 构造 A B
-  mzd_t *A = mzd_init(R_BITS,x_weight);
-  mzd_t *B = mzd_init(R_BITS,1);
+  mzd_t *A = mzd_init(R_BITS, x_weight);
+  mzd_t *B = mzd_init(R_BITS, 1);
   // 给 A 填充信息
   wi_t const width_A    = A->width - 1;
   word const mask_end_A = A->high_bitmask;
-  for (rci_t i = 0; i < A->nrows; ++i) {
+  for(rci_t i = 0; i < A->nrows; ++i) {
     word *row = mzd_row(A, i);
-    for (wi_t j = 0; j < width_A; ++j) row[j] = ((uint64_t*)(equations_guss_byte[i]))[j];
-    row[width_A] ^= (row[width_A] ^ ((uint64_t*)equations_guss_byte[i])[width_A]) & mask_end_A;
+    for(wi_t j = 0; j < width_A; ++j)
+      row[j] = ((uint64_t *)(equations_guss_byte[i]))[j];
+    row[width_A] ^=
+      (row[width_A] ^ ((uint64_t *)equations_guss_byte[i])[width_A]) & mask_end_A;
   }
   __M4RI_DD_MZD(A);
 
   // 给 B 填充信息
   wi_t const width_B    = B->width - 1;
   word const mask_end_B = B->high_bitmask;
-  for (rci_t i = 0; i < B->nrows; ++i) {
+  for(rci_t i = 0; i < B->nrows; ++i) {
     word *row = mzd_row(B, i);
-    for (wi_t j = 0; j < width_B; ++j) row[j] = ((uint64_t*)(equations_guss_byte[i]))[width_A + 1];
-    row[width_B] ^= (row[width_B] ^ ((uint64_t*)equations_guss_byte[i])[width_A + 1]) & mask_end_B;
+    for(wi_t j = 0; j < width_B; ++j)
+      row[j] = ((uint64_t *)(equations_guss_byte[i]))[width_A + 1];
+    row[width_B] ^=
+      (row[width_B] ^ ((uint64_t *)equations_guss_byte[i])[width_A + 1]) &
+      mask_end_B;
   }
   __M4RI_DD_MZD(B);
 
-  // printf("x_weight %u\n", x_weight);
-  // printf("width_A %lu\n", width_A);
-  // printf("guss_j_num %u\n", guss_j_num);
-  // mzd_print(B);
+  int consistency = mzd_solve_left(A, B, 0, 0);
 
-
-  clock_t start_m;
-  clock_t end_m;
-  start_m = clock(); 
-  int consistency = mzd_solve_left(A, B, 0, 1);
-  end_m = clock();      
-  printf("\t m4ri 求解 took %lfs\n", ((double)(end_m - start_m) / CLOCKS_PER_SEC));
-
-  if (consistency == -1) {
-    printf("failed (solution should have been found)\n");
-  }else{
-    printf("m4ri 求解成功\n");
-  }
-
-  // ====================================================
-
-
-
-
-
-  start_1 = clock();      
-
-  // =================guss 解方程==================
-
-  // 设置 x 主元表
-  uint8_t guss_x_main[R_BITS] = {0};
-  // 开始消元
-  for(uint32_t guss_j = 0; guss_j < x_weight; guss_j++) {
-    uint8_t  mask_1    = 1;
-    uint8_t  mask_guss = (mask_1 << (guss_j % GUSS_BLOCK));
-    uint32_t eq_j      = guss_j / GUSS_BLOCK;
-    for(uint32_t guss_i = guss_j; guss_i < R_BITS; guss_i++) {
-      if((mask_guss & equations_guss_byte[guss_i][eq_j]) != 0) {
-        if(guss_x_main[guss_j] == 0) {
-          // 如果此列没有主元优先挑选主元
-          // 将此行作为当前列主元，交换第一行并继续向后消元
-          guss_x_main[guss_j] = 1;
-          swap(equations_guss_byte[guss_j], equations_guss_byte[guss_i], eq_j,
-               guss_j_num);
-        } else {
-          // 使用第 guss_j 行消此行
-          GUARD(xor_8(equations_guss_byte[guss_i], equations_guss_byte[guss_i],
-                      equations_guss_byte[guss_j], guss_j_num, eq_j));
-        }
-      }
-    }
-  }
-
-  end_1 = clock();        
-  printf("\t guss 消除 took %lfs\n", ((double)(end_1 - start_1) / CLOCKS_PER_SEC));
-
-  start_2 = clock();
-  
-  // 倒着求解
-  for(int guss_j = x_weight - 1; guss_j >= 0; guss_j--) {
-    uint32_t eq_j = guss_j / GUSS_BLOCK;
-    for(uint32_t guss_i = guss_j; guss_i > 0; guss_i--) {
-      if((equations_guss_byte[guss_j][eq_j] &
-          equations_guss_byte[guss_i - 1][eq_j]) != 0) {
-        equations_guss_byte[guss_i - 1][eq_j] ^=
-          equations_guss_byte[guss_j][eq_j];
-        equations_guss_byte[guss_i - 1][guss_j_num - 1] ^=
-          equations_guss_byte[guss_j][guss_j_num - 1];
-      }
-    }
-  }
-
-  end_2 = clock();        
-  printf("\t guss 求解 took %lfs\n", ((double)(end_2 - start_2) / CLOCKS_PER_SEC));
-
-  // 验证解方程正确性===================
-  // 构造高斯消元解数组
-  uint32_t x[2 * R_BITS] = {0};
-  for(uint32_t i = 0; i < x_weight; i++) {
-    if(equations_guss_byte[i][guss_j_num - 1] == 0) {
-      x[x_arr[i]] = 2;
-    } else {
-      x[x_arr[i]] = 1;
-    }
-  }
-
-  // mzd_print_row(A,1);
-
-  // // 验证解方程正确性===================
-  // // 构造高斯消元解数组
-  // uint32_t x[2 * R_BITS] = {0};
-  // for(uint32_t i = 0; i < x_weight; i++) {
-  //   if(equations_guss_byte[i][guss_j_num - 1] == 0) {
-  //     x[x_arr[i]] = 2;
-  //   } else {
-  //     x[x_arr[i]] = 1;
-  //   }
-  // }
-
-  // 构造验证 e
-  e_t e_v = {0};
-  solving_equations_mf((e_t *)&e_v, x);
-
-  DEFER_CLEANUP(syndrome_t s_v = {0}, syndrome_cleanup);
-
-  GUARD(recompute_syndrome(&s_v, &c0, &h0, &pk, &e_v, &ctx));
-
-  // 解方程失败则输出错误
-  if(r_bits_vector_weight((r_t *)s_v.qw) > 0) {
-    printf("\n解方程失败\n");
+  if(consistency == -1) {
+    // printf("failed (solution should have been found)\n");
   } else {
-    printf("\n解方程成功\n");
+    // printf("m4ri 求解成功\n");
+  }
+
+  // end_m = clock();
+  // printf("\t m4ri 求解 took %lfs\n",
+  //        ((double)(end_m - start_m) / CLOCKS_PER_SEC));
+
+  // 构造m4ri解数组
+  uint32_t x_m4[2 * R_BITS] = {0};
+
+  // 将结果从 B 中取出来
+  for(uint32_t i = 0; i < x_weight; i++) {
+    word const *row = mzd_row_const(B, i);
+    if((row[0] & 1) == 1){
+      x_m4[x_arr[i]] = 1;
+    }else{
+      x_m4[x_arr[i]] = 2;
+    }
+  }
+
+  e_t e_v_m4 = {0};
+  solving_equations_mf((e_t *)&e_v_m4, x_m4);
+
+  DEFER_CLEANUP(syndrome_t s_v_m4 = {0}, syndrome_cleanup);
+
+  GUARD(recompute_syndrome(&s_v_m4, &c0, &h0, &pk, &e_v_m4, &ctx));
+
+  // m4ri失败则输出错误
+  if(r_bits_vector_weight((r_t *)s_v_m4.qw) > 0) {
+    // printf("\nm4ri译码失败\n");
+  } else {
+    // printf("\nm4ri译码成功\n");
   }
 
   // 译码失败返回错误
   if(r_bits_vector_weight((r_t *)s.qw) > 0) {
-    printf("\nBGF译码失败\n");
+    // printf("\nBGF译码失败\n");
     BIKE_ERROR(E_DECODING_FAILURE);
   }
 
-  printf("\nBGF译码成功\n");
+  // printf("\nBGF译码成功\n");
 
   return SUCCESS;
 }

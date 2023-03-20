@@ -82,8 +82,11 @@ int main()
       continue;
     }
 
+    // clock_t start_1 = clock();   
     // Decapsulate
     MEASURE("  decaps", dec_rc = crypto_kem_dec(k_dec.val, ct.val, sk.val););
+    // clock_t end_1 = clock();      
+    // printf("\tDecapsulate took %lfs\n", ((double)(end_1 - start_1) / CLOCKS_PER_SEC));
 
     // Check test status
     if(dec_rc != 0) {
