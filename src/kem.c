@@ -247,7 +247,8 @@ int crypto_kem_enc(OUT unsigned char *     ct,
 //               ss is the shared secret
 int crypto_kem_dec(OUT unsigned char *     ss,
                    IN const unsigned char *ct,
-                   IN const unsigned char *sk)
+                   IN const unsigned char *sk,
+                   IN uint32_t *x_count)
 {
   // Public values, does not require a cleanup on exit
   ct_t l_ct;
@@ -265,7 +266,7 @@ int crypto_kem_dec(OUT unsigned char *     ss,
   bike_memcpy(&l_sk, sk, sizeof(l_sk));
 
   // Decode and check if success.
-  volatile uint32_t success_cond = (decode(&e, &l_ct, &l_sk) == SUCCESS);
+  volatile uint32_t success_cond = (decode(&e, &l_ct, &l_sk, x_count) == SUCCESS);
 
   // Copy the error vector in the padded struct.
   e_prime.val[0].val = e.val[0];

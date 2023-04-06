@@ -40,7 +40,7 @@
 #elif(LEVEL == 3)
 #  define R_BITS 24659
 #  define D      103
-#  define T      199
+#  define T_BIKE      199
 
 #  define THRESHOLD_COEFF0 15.2588
 #  define THRESHOLD_COEFF1 0.005265
@@ -54,7 +54,7 @@
 #elif (LEVEL == 5)
 #  define R_BITS 40973
 #  define D      137
-#  define T      264
+#  define T_BIKE      264
 
 #  define THRESHOLD_COEFF0 17.8785
 #  define THRESHOLD_COEFF1 0.00402312
@@ -107,7 +107,7 @@
 //////////////////////////////////
 #define BGF_DECODER
 #define DELTA  3
-#define DELTA_EQ 9
-#define DELTA_EQ_STEP23 0
+#define DELTA_EQ 7
+#define DELTA_EQ_STEP23 3
 #define SLICES (LOG2_MSB(D) + 1)
 
