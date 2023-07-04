@@ -190,16 +190,16 @@ ret_t generate_error_vector(OUT pad_e_t *e, IN const seed_t *seed)
 
   GUARD(init_prf_state(&prf_state, MAX_PRF_INVOCATION, seed));
 
-  idx_t wlist[T];
+  idx_t wlist[T_BIKE];
 #if defined(UNIFORM_SAMPLING)
   GUARD(ctx.sample_error_vec_indices(wlist, &prf_state));
 #else
-  GUARD(sample_indices_fisher_yates(wlist, T, N_BITS, &prf_state));
+  GUARD(sample_indices_fisher_yates(wlist, T_BIKE, N_BITS, &prf_state));
 #endif
 
   // (e0, e1) hold bits 0..R_BITS-1 and R_BITS..2*R_BITS-1 of the error, resp.
-  ctx.secure_set_bits(&e->val[0], 0, wlist, T);
-  ctx.secure_set_bits(&e->val[1], R_BITS, wlist, T);
+  ctx.secure_set_bits(&e->val[0], 0, wlist, T_BIKE);
+  ctx.secure_set_bits(&e->val[1], R_BITS, wlist, T_BIKE);
 
   // Clean the padding of the elements.
   PE0_RAW(e)[R_BYTES - 1] &= LAST_R_BYTE_MASK;

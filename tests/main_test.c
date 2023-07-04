@@ -16,6 +16,9 @@
 #include "utilities.h"
 #include "cpu_features.h"
 
+// 定义是否将未知数个数写入文件
+#define W_FILE 1
+
 #if !defined(NUM_OF_TESTS)
 #  define NUM_OF_TESTS 1
 #endif
@@ -42,6 +45,9 @@ typedef struct magic_number_s {
 ////////////////////////////////////////////////////////////////
 int main()
 {
+  // 定义未知数个数
+  uint32_t x_count = 0;
+
   // Initialize the CPU features flags
   cpu_features_init();
 
@@ -82,8 +88,11 @@ int main()
       continue;
     }
 
+    // clock_t start_1 = clock();
     // Decapsulate
-    MEASURE("  decaps", dec_rc = crypto_kem_dec(k_dec.val, ct.val, sk.val););
+    MEASURE("  decaps", dec_rc = crypto_kem_dec(k_dec.val, ct.val, sk.val, &x_count););
+    // clock_t end_1 = clock();
+    // printf("\tDecapsulate took %lfs\n", ((double)(end_1 - start_1) / CLOCKS_PER_SEC));
 
     // Check test status
     if(dec_rc != 0) {
@@ -109,6 +118,14 @@ int main()
           SIZEOF_BITS(k_enc.val));
     print("Responder's computed key (K) of 256 bits  = ", (uint64_t *)k_dec.val,
           SIZEOF_BITS(k_enc.val));
+
+    // 写入文件
+    if(W_FILE == 1){
+      FILE *fp_1;
+      fp_1 = fopen("x_count.txt", "a");
+      fprintf(fp_1, "%u,", x_count);
+      fclose(fp_1);
+      }
   }
 
   return 0;

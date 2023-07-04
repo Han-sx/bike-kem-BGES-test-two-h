@@ -20,6 +20,7 @@ add_subdirectory(${SRC_DIR})
 add_subdirectory(${TESTS_DIR})
 
 target_link_libraries(bike-test ${PROJECT_NAME})
+target_link_libraries(bike-test /usr/local/lib/libm4ri-0.0.20200125.so)
 
 if(LINK_OPENSSL)
   message(STATUS "Linking OpenSSL")
