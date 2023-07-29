@@ -17,7 +17,7 @@
 #include "cpu_features.h"
 
 // 定义是否将未知数个数写入文件
-#define W_FILE 1
+#define W_FILE 0
 
 #if !defined(NUM_OF_TESTS)
 #  define NUM_OF_TESTS 1
