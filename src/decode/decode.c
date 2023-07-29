@@ -58,11 +58,11 @@
 
 #define GUSS_BLOCK 64
 // 是否对未知数进行填充，1为填充，0为不填充
-#define X_COUNT_PAD 1
+#define X_COUNT_PAD 0
 // 填充为 X_COUNT_MIN
 #define X_COUNT_MIN 7000
 // 定义是否进行方程组求解
-#define SOLVE_M4RI 0
+#define SOLVE_M4RI 1
 
 // 利用解出来的 b 和 ct 还原 fm(ct_verify)
 _INLINE_ void solving_equations_mf(IN OUT e_t *ct_verify, IN uint32_t b[])
@@ -569,9 +569,10 @@ ret_t decode(OUT e_t *e, IN const ct_t *ct, IN const sk_t *sk, IN uint32_t *x_co
     int consistency = mzd_solve_left(A, B, 0, 0);
 
     if(consistency == -1) {
-      // printf("failed (solution should have been found)\n");
+      printf("failed (solution should have been found)\n");
+      printf("m4ri 求解失败\n");
     } else {
-      // printf("m4ri 求解成功\n");
+      printf("m4ri 求解成功\n");
     }
 
     // end_m = clock();
@@ -600,19 +601,19 @@ ret_t decode(OUT e_t *e, IN const ct_t *ct, IN const sk_t *sk, IN uint32_t *x_co
 
     // m4ri失败则输出错误
     if(r_bits_vector_weight((r_t *)s_v_m4.qw) > 0) {
-      // printf("\nm4ri译码失败\n");
+      printf("\nm4ri译码失败\n");
     } else {
-      // printf("\nm4ri译码成功\n");
+      printf("\nm4ri译码成功\n");
     }
   }
 
   // 译码失败返回错误
   if(r_bits_vector_weight((r_t *)s.qw) > 0) {
-    // printf("\nBGF译码失败\n");
+    printf("\nBGF译码失败\n");
     BIKE_ERROR(E_DECODING_FAILURE);
   }
 
-  // printf("\nBGF译码成功\n");
+  printf("\nBGF译码成功\n");
 
   return SUCCESS;
 }
