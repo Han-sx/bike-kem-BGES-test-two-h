@@ -1,5 +1,6 @@
 Additional implementation of BIKE (Bit Flipping Key Encapsulation) 
 ------------------------------------------------------------------
+This package adds m4ri to solve equations based on the original bike-kem, and considers using supplementary keys to increase the decoding success rate.
 
 This package is an "Additional Optimized" implementation of the 
 Key Encapsulation Mechanism (KEM) [BIKE](https://bikesuite.org). 
