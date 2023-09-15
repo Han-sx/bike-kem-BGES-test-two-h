@@ -74,6 +74,10 @@ int main()
     // Key generation
     MEASURE("  keypair", res = crypto_kem_keypair(pk.val, sk.val););
 
+    // 增加辅助密钥生成
+    // Key generation
+    // MEASURE("  keypair", res = crypto_kem_keypair(pk.val, sk.val););
+  
     if(res != 0) {
       printf("Keypair failed with error: %d\n", res);
       continue;
@@ -82,6 +86,7 @@ int main()
     uint32_t dec_rc = 0;
 
     // Encapsulate
+    // 此部分需要增加辅助密钥加密，输出 ct 和 辅助密文 ct_a
     MEASURE("  encaps", res = crypto_kem_enc(ct.val, k_enc.val, pk.val););
     if(res != 0) {
       printf("encapsulate failed with error: %d\n", res);
@@ -90,6 +95,7 @@ int main()
 
     // clock_t start_1 = clock();
     // Decapsulate
+    // 此部分增加辅助密钥解密，将 ct 和 ct_a 输入到解密程序中
     MEASURE("  decaps", dec_rc = crypto_kem_dec(k_dec.val, ct.val, sk.val, &x_count););
     // clock_t end_1 = clock();
     // printf("\tDecapsulate took %lfs\n", ((double)(end_1 - start_1) / CLOCKS_PER_SEC));
