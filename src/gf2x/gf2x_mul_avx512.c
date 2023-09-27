@@ -101,3 +101,28 @@ void gf2x_red_avx512(OUT pad_r_t *c, IN const dbl_pad_r_t *a)
   secure_clean((uint8_t *)&c64[R_QWORDS],
                (R_PADDED_QWORDS - R_QWORDS) * sizeof(uint64_t));
 }
+
+void gf2x_red_avx512_two(OUT pad_r_t_two *c, IN const dbl_pad_r_t_two *a)
+{
+  const uint64_t *a64 = (const uint64_t *)a;
+  uint64_t *      c64 = (uint64_t *)c;
+
+  for(size_t i = 0; i < R_QWORDS_TWO; i += REG_QWORDS) {
+    REG_T vt0 = LOAD(&a64[i]);
+    REG_T vt1 = LOAD(&a64[i + R_QWORDS_TWO]);
+    REG_T vt2 = LOAD(&a64[i + R_QWORDS_TWO - 1]);
+
+    vt1 = SLLI_I64(vt1, LAST_R_QWORD_TRAIL_TWO);
+    vt2 = SRLI_I64(vt2, LAST_R_QWORD_LEAD_TWO);
+
+    vt0 ^= (vt1 | vt2);
+
+    STORE(&c64[i], vt0);
+  }
+
+  c64[R_QWORDS_TWO - 1] &= LAST_R_QWORD_MASK_TWO;
+
+  // Clean the secrets from the upper part of c
+  secure_clean((uint8_t *)&c64[R_QWORDS_TWO],
+               (R_PADDED_QWORDS_TWO - R_QWORDS_TWO) * sizeof(uint64_t));
+}

@@ -36,6 +36,10 @@ typedef struct r_s {
   uint8_t raw[R_BYTES];
 } r_t;
 
+typedef struct r_s_two {
+  uint8_t raw[R_BYTES_TWO];
+} r_t_two;
+
 typedef struct m_s {
   uint8_t raw[M_BYTES];
 } m_t;
@@ -52,7 +56,13 @@ typedef struct ct_s {
   m_t c1;
 } ct_t;
 
+typedef struct ct_s_two {
+  r_t_two c0;
+  m_t c1;
+} ct_t_two;
+
 typedef r_t pk_t;
+typedef r_t_two pk_t_two;
 
 typedef struct ss_st {
   uint8_t raw[SS_BYTES];
@@ -75,6 +85,13 @@ typedef struct sk_s {
   m_t                   sigma;
 } sk_t;
 
+typedef struct sk_s_two {
+  compressed_idx_d_ar_t wlist;
+  r_t_two                   bin[N0];
+  pk_t_two                  pk;
+  m_t                   sigma;
+} sk_t_two;
+
 typedef ALIGN(sizeof(idx_t)) sk_t aligned_sk_t;
 
 // Pad r to the next Block
@@ -83,10 +100,19 @@ typedef struct pad_r_s {
   uint8_t pad[R_PADDED_BYTES - sizeof(r_t)];
 } ALIGN(ALIGN_BYTES) pad_r_t;
 
+typedef struct pad_r_s_two {
+  r_t_two     val;
+  uint8_t pad[R_PADDED_BYTES_TWO - sizeof(r_t_two)];
+} ALIGN(ALIGN_BYTES) pad_r_t_two;
+
 // Double padded r, required for multiplication and squaring
 typedef struct dbl_pad_r_s {
   uint8_t raw[2 * R_PADDED_BYTES];
 } ALIGN(ALIGN_BYTES) dbl_pad_r_t;
+
+typedef struct dbl_pad_r_s_two {
+  uint8_t raw[2 * R_PADDED_BYTES_TWO];
+} ALIGN(ALIGN_BYTES) dbl_pad_r_t_two;
 
 typedef struct pad_e_s {
   pad_r_t val[N0];

@@ -167,3 +167,56 @@ void gf2x_mod_inv(OUT pad_r_t *c, IN const pad_r_t *a)
   gf2x_mod_sqr_in_place(&t, &sec_buf, &ctx);
   c->val = t.val;
 }
+
+void gf2x_mod_inv_two(OUT pad_r_t_two *c, IN const pad_r_t_two *a)
+{
+  // Initialize gf2x methods struct
+  gf2x_ctx_two ctx;
+  gf2x_ctx_init(&ctx);
+
+  // Note that exp0/1_k/l are predefined constants that depend only on the value
+  // of R. This value is public. Therefore, branches in this function, which
+  // depends on R, are also "public". Code that releases these branches
+  // (taken/not-taken) does not leak secret information.
+  const size_t exp0_k[MAX_I] = {EXP0_K_VALS};
+  const size_t exp0_l[MAX_I] = {EXP0_L_VALS};
+  const size_t exp1_k[MAX_I] = {EXP1_K_VALS};
+  const size_t exp1_l[MAX_I] = {EXP1_L_VALS};
+
+  DEFER_CLEANUP(pad_r_t f = {0}, pad_r_cleanup);
+  DEFER_CLEANUP(pad_r_t g = {0}, pad_r_cleanup);
+  DEFER_CLEANUP(pad_r_t t = {0}, pad_r_cleanup);
+  DEFER_CLEANUP(dbl_pad_r_t sec_buf = {0}, dbl_pad_r_cleanup);
+
+  // Steps 2 and 3 in [1](Algorithm 2)
+  f.val = a->val;
+  t.val = a->val;
+
+  for(size_t i = 1; i < MAX_I; i++) {
+    // Step 5 in [1](Algorithm 2), exponentiation 0: g = f^2^2^(i-1)
+    if(exp0_k[i - 1] <= K_SQR_THR) {
+      repeated_squaring(&g, &f, exp0_k[i - 1], &sec_buf, &ctx);
+    } else {
+      ctx.k_sqr(&g, &f, exp0_l[i - 1]);
+    }
+
+    // Step 6, [1](Algorithm 2): f = f*g
+    gf2x_mod_mul_with_ctx(&f, &g, &f, &ctx);
+
+    if(exp1_k[i] != 0) {
+      // Step 8, [1](Algorithm 2), exponentiation 1: g = f^2^((r-2) % 2^i)
+      if(exp1_k[i] <= K_SQR_THR) {
+        repeated_squaring(&g, &f, exp1_k[i], &sec_buf, &ctx);
+      } else {
+        ctx.k_sqr(&g, &f, exp1_l[i]);
+      }
+
+      // Step 9, [1](Algorithm 2): t = t*g;
+      gf2x_mod_mul_with_ctx(&t, &g, &t, &ctx);
+    }
+  }
+
+  // Step 10, [1](Algorithm 2): c = t^2
+  gf2x_mod_sqr_in_place(&t, &sec_buf, &ctx);
+  c->val = t.val;
+}

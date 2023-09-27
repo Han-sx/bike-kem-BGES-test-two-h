@@ -15,6 +15,7 @@
 // Keygenerate - pk is the public key,
 //               sk is the private key,
 int crypto_kem_keypair(OUT unsigned char *pk, OUT unsigned char *sk);
+int crypto_kem_keypair_two(OUT unsigned char *pk, OUT unsigned char *sk);
 
 // Encapsulate - pk is the public key,
 //               ct is a key encapsulation message (ciphertext),

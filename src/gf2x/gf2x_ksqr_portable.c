@@ -46,3 +46,25 @@ void k_sqr_port(OUT pad_r_t *c, IN const pad_r_t *a, IN const size_t l_param)
   }
   c->val.raw[R_BYTES - 1] &= LAST_R_BYTE_MASK;
 }
+
+void k_sqr_port_two(OUT pad_r_t_two *c, IN const pad_r_t_two *a, IN const size_t l_param)
+{
+  bike_memset(c->val.raw, 0, sizeof(c->val));
+
+  // Compute the result byte by byte
+  size_t idx = 0;
+  for(size_t i = 0; i < R_BYTES_TWO; i++) {
+    for(size_t j = 0; j < BITS_IN_BYTE; j++, idx++) {
+      // Bit of "c" at position idx is set to the value of
+      // the bit of "a" at position pi1(idx) = (l_param * idx) % R_BITS.
+      size_t pos = (l_param * idx) % R_BITS_TWO;
+
+      size_t  pos_byte = pos >> 3;
+      size_t  pos_bit  = pos & 7;
+      uint8_t bit      = (a->val.raw[pos_byte] >> pos_bit) & 1;
+
+      c->val.raw[i] |= (bit << j);
+    }
+  }
+  c->val.raw[R_BYTES_TWO - 1] &= LAST_R_BYTE_MASK_TWO;
+}
