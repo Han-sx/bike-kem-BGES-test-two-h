@@ -114,6 +114,17 @@ _INLINE_ void bytes_to_bin(OUT pad_r_t *bin_buf, IN const uint8_t *bytes_buf)
   }
 }
 
+_INLINE_ void bytes_to_bin_two(OUT pad_r_t_two *bin_buf, IN const uint8_t *bytes_buf)
+{
+  uint64_t *bin64 = (uint64_t *)bin_buf;
+
+  __m512i first_bit_mask = SET1_I8(1);
+  for(size_t i = 0; i < R_QWORDS_TWO; i++) {
+    __m512i t = LOAD(&bytes_buf[i * BYTES_IN_ZMM]);
+    bin64[i]  = CMPM_U8(t, first_bit_mask, _MM_CMPINT_EQ);
+  }
+}
+
 // Convert from binary representation where each byte holds 8 bits
 // to byte representation where each byte holds a single bit of the polynomial
 _INLINE_ void bin_to_bytes(OUT uint8_t *bytes_buf, IN const pad_r_t *bin_buf)
@@ -121,6 +132,16 @@ _INLINE_ void bin_to_bytes(OUT uint8_t *bytes_buf, IN const pad_r_t *bin_buf)
   const uint64_t *bin64 = (const uint64_t *)bin_buf;
 
   for(size_t i = 0; i < R_QWORDS; i++) {
+    __m512i t = SET1MZ_I8(bin64[i], 1);
+    STORE(&bytes_buf[i * BYTES_IN_ZMM], t);
+  }
+}
+
+_INLINE_ void bin_to_bytes_two(OUT uint8_t *bytes_buf, IN const pad_r_t_two *bin_buf)
+{
+  const uint64_t *bin64 = (const uint64_t *)bin_buf;
+
+  for(size_t i = 0; i < R_QWORDS_TWO; i++) {
     __m512i t = SET1MZ_I8(bin64[i], 1);
     STORE(&bytes_buf[i * BYTES_IN_ZMM], t);
   }
@@ -153,6 +174,28 @@ void k_sqr_avx512(OUT pad_r_t *c, IN const pad_r_t *a, IN const size_t l_param)
   }
 
   bytes_to_bin(c, c_bytes);
+
+  secure_clean(a_bytes, sizeof(a_bytes));
+  secure_clean(c_bytes, sizeof(c_bytes));
+}
+
+void k_sqr_avx512_two(OUT pad_r_t_two *c, IN const pad_r_t_two *a, IN const size_t l_param)
+{
+  ALIGN(ALIGN_BYTES) map_word_t map[R_PADDED_TWO];
+  ALIGN(ALIGN_BYTES) uint8_t    a_bytes[R_PADDED_TWO];
+  ALIGN(ALIGN_BYTES) uint8_t    c_bytes[R_PADDED_TWO] = {0};
+
+  // Generate the permutation map defined by pi1 and l_param.
+  generate_map(map, l_param);
+
+  bin_to_bytes_two(a_bytes, a);
+
+  // Permute "a" using the generated permutation map.
+  for(size_t i = 0; i < R_BITS; i++) {
+    c_bytes[i] = a_bytes[map[i]];
+  }
+
+  bytes_to_bin_two(c, c_bytes);
 
   secure_clean(a_bytes, sizeof(a_bytes));
   secure_clean(c_bytes, sizeof(c_bytes));

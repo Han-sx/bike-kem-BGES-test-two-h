@@ -201,6 +201,53 @@ int crypto_kem_keypair(OUT unsigned char *pk, OUT unsigned char *sk)
   return SUCCESS;
 }
 
+int crypto_kem_keypair_two(OUT unsigned char *pk, OUT unsigned char *sk)
+{
+  DEFER_CLEANUP(aligned_sk_t l_sk = {0}, sk_cleanup);
+
+  // The secret key is (h0, h1),
+  // and the public key h=(h0^-1 * h1).
+  // Padded structures are used internally, and are required by the
+  // decoder and the gf2x multiplication.
+  DEFER_CLEANUP(pad_r_t_two h0 = {0}, pad_r_two_cleanup);
+  DEFER_CLEANUP(pad_r_t_two h1 = {0}, pad_r_two_cleanup);
+  DEFER_CLEANUP(pad_r_t_two h0inv = {0}, pad_r_two_cleanup);
+  DEFER_CLEANUP(pad_r_t_two h = {0}, pad_r_two_cleanup);
+
+  // The randomness of the key generation
+  DEFER_CLEANUP(seeds_t seeds = {0}, seeds_cleanup);
+
+  get_seeds(&seeds);
+  GUARD(generate_secret_key_two(&h0, &h1,
+                            l_sk.wlist[0].val, l_sk.wlist[1].val,
+                            &seeds.seed[0]));
+
+  // Generate sigma
+  convert_seed_to_m_type(&l_sk.sigma, &seeds.seed[1]);
+
+  // Calculate the public key
+  gf2x_mod_inv_two(&h0inv, &h0);
+  gf2x_mod_mul(&h, &h1, &h0inv);
+
+  // Fill the secret key data structure with contents - cancel the padding
+  l_sk.bin[0] = h0.val;
+  l_sk.bin[1] = h1.val;
+  l_sk.pk     = h.val;
+
+  // Copy the data to the output buffers
+  bike_memcpy(sk, &l_sk, sizeof(l_sk));
+  bike_memcpy(pk, &l_sk.pk, sizeof(l_sk.pk));
+
+  print("h:  ", (uint64_t *)&l_sk.pk, R_BITS);
+  print("h0: ", (uint64_t *)&l_sk.bin[0], R_BITS);
+  print("h1: ", (uint64_t *)&l_sk.bin[1], R_BITS);
+  print("h0 wlist:", (uint64_t *)&l_sk.wlist[0], SIZEOF_BITS(compressed_idx_d_t));
+  print("h1 wlist:", (uint64_t *)&l_sk.wlist[1], SIZEOF_BITS(compressed_idx_d_t));
+  print("sigma: ", (uint64_t *)l_sk.sigma.raw, M_BITS);
+
+  return SUCCESS;
+}
+
 // Encapsulate - pk is the public key,
 //               ct is a key encapsulation message (ciphertext),
 //               ss is the shared secret.

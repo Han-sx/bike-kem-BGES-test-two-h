@@ -28,4 +28,8 @@ ret_t generate_secret_key(OUT pad_r_t *h0, OUT pad_r_t *h1,
                           OUT idx_t *h0_wlist, OUT idx_t *h1_wlist,
                           IN const seed_t *seed);
 
+ret_t generate_secret_key_two(OUT pad_r_t_two *h0, OUT pad_r_t_two *h1,
+                          OUT idx_t *h0_wlist, OUT idx_t *h1_wlist,
+                          IN const seed_t *seed);
+
 ret_t generate_error_vector(OUT pad_e_t *e, IN const seed_t *seed);

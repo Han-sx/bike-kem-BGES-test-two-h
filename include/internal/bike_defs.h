@@ -20,9 +20,10 @@
 
 #if(LEVEL == 1)
 // 64-bits of post-quantum security parameters (BIKE spec):
-#  define R_BITS 12323 // 12323
-#  define D      71
-#  define T_BIKE      134
+#  define R_BITS     12323 // 12323
+#  define R_BITS_TWO 12323 // 12323
+#  define D          71
+#  define T_BIKE     134
 
 #  define THRESHOLD_COEFF0 13.530
 #  define THRESHOLD_COEFF1 0.0069722
@@ -40,7 +41,7 @@
 #elif(LEVEL == 3)
 #  define R_BITS 24659
 #  define D      103
-#  define T_BIKE      199
+#  define T_BIKE 199
 
 #  define THRESHOLD_COEFF0 15.2588
 #  define THRESHOLD_COEFF1 0.005265
@@ -49,12 +50,12 @@
 #  define MAX_RAND_INDICES_T 373
 
 // The gf2m code is optimized to a block in this case:
-#  define BLOCK_BITS 32768
+#  define BLOCK_BITS         32768
 
-#elif (LEVEL == 5)
+#elif(LEVEL == 5)
 #  define R_BITS 40973
 #  define D      137
-#  define T_BIKE      264
+#  define T_BIKE 264
 
 #  define THRESHOLD_COEFF0 17.8785
 #  define THRESHOLD_COEFF1 0.00402312
@@ -71,25 +72,36 @@
 
 // Round the size to the nearest byte.
 // SIZE suffix, is the number of bytes (uint8_t).
-#define N_BITS   (R_BITS * N0)
-#define R_BYTES  DIVIDE_AND_CEIL(R_BITS, 8)
-#define R_QWORDS DIVIDE_AND_CEIL(R_BITS, 8 * BYTES_IN_QWORD)
-#define R_XMM    DIVIDE_AND_CEIL(R_BITS, 8 * BYTES_IN_XMM)
-#define R_YMM    DIVIDE_AND_CEIL(R_BITS, 8 * BYTES_IN_YMM)
-#define R_ZMM    DIVIDE_AND_CEIL(R_BITS, 8 * BYTES_IN_ZMM)
+#define N_BITS       (R_BITS * N0)
+#define R_BYTES      DIVIDE_AND_CEIL(R_BITS, 8)
+#define R_BYTES_TWO  DIVIDE_AND_CEIL(R_BITS_TWO, 8)
+#define R_QWORDS     DIVIDE_AND_CEIL(R_BITS, 8 * BYTES_IN_QWORD)
+#define R_QWORDS_TWO DIVIDE_AND_CEIL(R_BITS_TWO, 8 * BYTES_IN_QWORD)
+#define R_XMM        DIVIDE_AND_CEIL(R_BITS, 8 * BYTES_IN_XMM)
+#define R_YMM        DIVIDE_AND_CEIL(R_BITS, 8 * BYTES_IN_YMM)
+#define R_ZMM        DIVIDE_AND_CEIL(R_BITS, 8 * BYTES_IN_ZMM)
 
-#define R_BLOCKS        DIVIDE_AND_CEIL(R_BITS, BLOCK_BITS)
-#define R_PADDED        (R_BLOCKS * BLOCK_BITS)
-#define R_PADDED_BYTES  (R_PADDED / 8)
-#define R_PADDED_QWORDS (R_PADDED / 64)
+#define R_BLOCKS           DIVIDE_AND_CEIL(R_BITS, BLOCK_BITS)
+#define R_BLOCKS_TWO       DIVIDE_AND_CEIL(R_BITS_TWO, BLOCK_BITS)
+#define R_PADDED           (R_BLOCKS * BLOCK_BITS)
+#define R_PADDED_TWO       (R_BLOCKS_TWO * BLOCK_BITS)
+#define R_PADDED_BYTES     (R_PADDED / 8)
+#define R_PADDED_BYTES_TWO (R_PADDED_TWO / 8)
+#define R_PADDED_QWORDS    (R_PADDED / 64)
+#define R_PADDED_QWORDS_TWO    (R_PADDED_TWO / 64)
 
-#define LAST_R_QWORD_LEAD  (R_BITS & MASK(6))
-#define LAST_R_QWORD_TRAIL (64 - LAST_R_QWORD_LEAD)
-#define LAST_R_QWORD_MASK  MASK(LAST_R_QWORD_LEAD)
+#define LAST_R_QWORD_LEAD      (R_BITS & MASK(6))
+#define LAST_R_QWORD_LEAD_TWO  (R_BITS_TWO & MASK(6))
+#define LAST_R_QWORD_TRAIL     (64 - LAST_R_QWORD_LEAD)
+#define LAST_R_QWORD_TRAIL_TWO (64 - LAST_R_QWORD_LEAD_TWO)
+#define LAST_R_QWORD_MASK      MASK(LAST_R_QWORD_LEAD)
+#define LAST_R_QWORD_MASK_TWO  MASK(LAST_R_QWORD_LEAD_TWO)
 
-#define LAST_R_BYTE_LEAD  (R_BITS & MASK(3))
-#define LAST_R_BYTE_TRAIL (8 - LAST_R_BYTE_LEAD)
-#define LAST_R_BYTE_MASK  MASK(LAST_R_BYTE_LEAD)
+#define LAST_R_BYTE_LEAD     (R_BITS & MASK(3))
+#define LAST_R_BYTE_LEAD_TWO (R_BITS_TWO & MASK(3))
+#define LAST_R_BYTE_TRAIL    (8 - LAST_R_BYTE_LEAD)
+#define LAST_R_BYTE_MASK     MASK(LAST_R_BYTE_LEAD)
+#define LAST_R_BYTE_MASK_TWO MASK(LAST_R_BYTE_LEAD_TWO)
 
 // Data alignement
 #define ALIGN_BYTES (BYTES_IN_ZMM)
@@ -106,8 +118,7 @@
 // Parameters for the BGF decoder.
 //////////////////////////////////
 #define BGF_DECODER
-#define DELTA  3
-#define DELTA_EQ 7
+#define DELTA           3
+#define DELTA_EQ        7
 #define DELTA_EQ_STEP23 3
-#define SLICES (LOG2_MSB(D) + 1)
-
+#define SLICES          (LOG2_MSB(D) + 1)

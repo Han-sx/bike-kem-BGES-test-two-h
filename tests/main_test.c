@@ -63,11 +63,15 @@ int main()
   STRUCT_WITH_MAGIC(sk, sizeof(sk_t));
   STRUCT_WITH_MAGIC(pk, sizeof(pk_t));
   STRUCT_WITH_MAGIC(ct, sizeof(ct_t));
+  STRUCT_WITH_MAGIC(sk_two, sizeof(sk_t_two));
+  STRUCT_WITH_MAGIC(pk_two, sizeof(pk_t_two));
+  STRUCT_WITH_MAGIC(ct_two, sizeof(ct_t_two));
   STRUCT_WITH_MAGIC(k_enc, sizeof(ss_t)); // shared secret after decapsulate
   STRUCT_WITH_MAGIC(k_dec, sizeof(ss_t)); // shared secret after encapsulate
 
   for(size_t i = 1; i <= NUM_OF_TESTS; ++i) {
     int res = 0;
+    int res_two = 0;
 
     printf("Code test: %lu\n", i);
 
@@ -76,7 +80,7 @@ int main()
 
     // 增加辅助密钥生成
     // Key generation
-    // MEASURE("  keypair", res = crypto_kem_keypair(pk.val, sk.val););
+    MEASURE("  keypair", res_two = crypto_kem_keypair_two(pk_two.val, sk_two.val););
   
     if(res != 0) {
       printf("Keypair failed with error: %d\n", res);

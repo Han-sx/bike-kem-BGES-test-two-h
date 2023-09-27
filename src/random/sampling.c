@@ -162,6 +162,26 @@ _INLINE_ ret_t generate_sparse_rep_for_sk(OUT pad_r_t *r,
   return SUCCESS;
 }
 
+_INLINE_ ret_t generate_sparse_rep_for_sk_two(OUT pad_r_t_two *r,
+                                          OUT idx_t *wlist,
+                                          IN OUT prf_state_t *prf_state,
+                                          IN sampling_ctx *ctx)
+{
+  idx_t wlist_temp[D] = {0};
+
+#if defined(UNIFORM_SAMPLING)
+  GUARD(generate_indices_mod_z(wlist_temp, D, R_BITS_TWO, prf_state));
+#else
+  GUARD(sample_indices_fisher_yates(wlist_temp, D, R_BITS_TWO, prf_state));
+#endif
+
+  bike_memcpy(wlist, wlist_temp, D * sizeof(idx_t));
+  ctx->secure_set_bits_two(r, 0, wlist, D);
+
+  secure_clean((uint8_t *)wlist_temp, sizeof(*wlist_temp));
+  return SUCCESS;
+}
+
 ret_t generate_secret_key(OUT pad_r_t *h0, OUT pad_r_t *h1,
                           OUT idx_t *h0_wlist, OUT idx_t *h1_wlist,
                           IN const seed_t *seed)
@@ -176,6 +196,24 @@ ret_t generate_secret_key(OUT pad_r_t *h0, OUT pad_r_t *h1,
 
   GUARD(generate_sparse_rep_for_sk(h0, h0_wlist, &prf_state, &ctx));
   GUARD(generate_sparse_rep_for_sk(h1, h1_wlist, &prf_state, &ctx));
+
+  return SUCCESS;
+}
+
+ret_t generate_secret_key_two(OUT pad_r_t_two *h0, OUT pad_r_t_two *h1,
+                          OUT idx_t *h0_wlist, OUT idx_t *h1_wlist,
+                          IN const seed_t *seed)
+{
+  // Initialize the sampling context.
+  sampling_ctx ctx = {0};
+  sampling_ctx_init(&ctx);
+
+  DEFER_CLEANUP(prf_state_t prf_state = {0}, clean_prf_state);
+
+  GUARD(init_prf_state(&prf_state, MAX_PRF_INVOCATION, seed));
+
+  GUARD(generate_sparse_rep_for_sk_two(h0, h0_wlist, &prf_state, &ctx));
+  GUARD(generate_sparse_rep_for_sk_two(h1, h1_wlist, &prf_state, &ctx));
 
   return SUCCESS;
 }
