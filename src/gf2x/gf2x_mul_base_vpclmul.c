@@ -127,3 +127,24 @@ void gf2x_sqr_vpclmul(OUT dbl_pad_r_t *c, IN const pad_r_t *a)
     STORE(&c64[i * 2 + QWORDS_IN_ZMM], vr1);
   }
 }
+
+void gf2x_sqr_vpclmul_two(OUT dbl_pad_r_t_two *c, IN const pad_r_t_two *a)
+{
+  __m512i va, vm, vr0, vr1;
+
+  const uint64_t *a64 = (const uint64_t *)a;
+  uint64_t *      c64 = (uint64_t *)c;
+
+  vm = SET_I64(7, 3, 6, 2, 5, 1, 4, 0);
+
+  for(size_t i = 0; i < (R_ZMM_TWO * QWORDS_IN_ZMM); i += QWORDS_IN_ZMM) {
+    va = LOAD(&a64[i]);
+    va = PERMXVAR_I64(vm, va);
+
+    vr0 = CLMUL(va, va, 0x00);
+    vr1 = CLMUL(va, va, 0x11);
+
+    STORE(&c64[i * 2], vr0);
+    STORE(&c64[i * 2 + QWORDS_IN_ZMM], vr1);
+  }
+}

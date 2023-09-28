@@ -20,6 +20,11 @@ void secure_set_bits_port(OUT pad_r_t *r,
                           IN const idx_t *wlist,
                           IN size_t       w_size);
 
+void secure_set_bits_port_two(OUT pad_r_t_two *r,
+                          IN size_t    first_pos,
+                          IN const idx_t *wlist,
+                          IN size_t       w_size);
+
 #if defined(UNIFORM_SAMPLING)
 ret_t sample_error_vec_indices_port(OUT idx_t *out,
                                     IN OUT prf_state_t *prf_state);
@@ -32,6 +37,16 @@ void secure_set_bits_avx2(OUT pad_r_t *r,
                           IN size_t       w_size);
 
 void secure_set_bits_avx512(OUT pad_r_t *r,
+                            IN size_t    first_pos,
+                            IN const idx_t *wlist,
+                            IN size_t       w_size);
+
+void secure_set_bits_avx2_two(OUT pad_r_t_two *r,
+                          IN size_t    first_pos,
+                          IN const idx_t *wlist,
+                          IN size_t       w_size);
+
+void secure_set_bits_avx512_two(OUT pad_r_t_two *r,
                             IN size_t    first_pos,
                             IN const idx_t *wlist,
                             IN size_t       w_size);

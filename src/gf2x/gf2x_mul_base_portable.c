@@ -75,3 +75,13 @@ void gf2x_sqr_port(OUT dbl_pad_r_t *c, IN const pad_r_t *a)
     gf2x_mul_base_port(&c64[2 * i], &a64[i], &a64[i]);
   }
 }
+
+void gf2x_sqr_port_two(OUT dbl_pad_r_t_two *c, IN const pad_r_t_two *a)
+{
+  const uint64_t *a64 = (const uint64_t *)a;
+  uint64_t *      c64 = (uint64_t *)c;
+
+  for(size_t i = 0; i < R_QWORDS_TWO; i++) {
+    gf2x_mul_base_port(&c64[2 * i], &a64[i], &a64[i]);
+  }
+}

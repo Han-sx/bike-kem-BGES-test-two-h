@@ -147,3 +147,21 @@ void gf2x_sqr_pclmul(OUT dbl_pad_r_t *c, IN const pad_r_t *a)
     STORE128(&c64[i * 2 + QWORDS_IN_XMM], vr1);
   }
 }
+
+void gf2x_sqr_pclmul_two(OUT dbl_pad_r_t_two *c, IN const pad_r_t_two *a)
+{
+  __m128i va, vr0, vr1;
+
+  const uint64_t *a64 = (const uint64_t *)a;
+  uint64_t *      c64 = (uint64_t *)c;
+
+  for(size_t i = 0; i < (R_XMM_TWO * QWORDS_IN_XMM); i += QWORDS_IN_XMM) {
+    va = LOAD128(&a64[i]);
+
+    vr0 = CLMUL(va, va, 0x00);
+    vr1 = CLMUL(va, va, 0x11);
+
+    STORE128(&c64[i * 2], vr0);
+    STORE128(&c64[i * 2 + QWORDS_IN_XMM], vr1);
+  }
+}

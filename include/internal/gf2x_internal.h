@@ -40,11 +40,14 @@ void karatzuba_add3_port(OUT uint64_t *c,
 // -------------------- FUNCTIONS NEEDED FOR GF2X INVERSION --------------------
 // c = a^2
 void gf2x_sqr_port(OUT dbl_pad_r_t *c, IN const pad_r_t *a);
+void gf2x_sqr_port_two(OUT dbl_pad_r_t_two *c, IN const pad_r_t_two *a);
 // The k-squaring function computes c = a^(2^k) % (x^r - 1),
 // It is required by inversion, where l_param is derived from k.
 void k_sqr_port(OUT pad_r_t *c, IN const pad_r_t *a, IN size_t l_param);
+void k_sqr_port_two(OUT pad_r_t_two *c, IN const pad_r_t_two *a, IN size_t l_param);
 // c = a mod (x^r - 1)
 void gf2x_red_port(OUT pad_r_t *c, IN const dbl_pad_r_t *a);
+void gf2x_red_port_two(OUT pad_r_t_two *c, IN const dbl_pad_r_t_two *a);
 
 // AVX2 and AVX512 versions of the functions
 #if defined(X86_64)
@@ -88,15 +91,22 @@ void karatzuba_add3_avx512(OUT uint64_t *c,
 // c = a^2
 void gf2x_sqr_pclmul(OUT dbl_pad_r_t *c, IN const pad_r_t *a);
 void gf2x_sqr_vpclmul(OUT dbl_pad_r_t *c, IN const pad_r_t *a);
+void gf2x_sqr_pclmul_two(OUT dbl_pad_r_t_two *c, IN const pad_r_t_two *a);
+void gf2x_sqr_vpclmul_two(OUT dbl_pad_r_t_two *c, IN const pad_r_t_two *a);
 
 // The k-squaring function computes c = a^(2^k) % (x^r - 1),
 // It is required by inversion, where l_param is derived from k.
 void k_sqr_avx2(OUT pad_r_t *c, IN const pad_r_t *a, IN size_t l_param);
 void k_sqr_avx512(OUT pad_r_t *c, IN const pad_r_t *a, IN size_t l_param);
+void k_sqr_avx2_two(OUT pad_r_t_two *c, IN const pad_r_t_two *a, IN size_t l_param);
+void k_sqr_avx512_two(OUT pad_r_t_two *c, IN const pad_r_t_two *a, IN size_t l_param);
 
 // c = a mod (x^r - 1)
 void gf2x_red_avx2(OUT pad_r_t *c, IN const dbl_pad_r_t *a);
 void gf2x_red_avx512(OUT pad_r_t *c, IN const dbl_pad_r_t *a);
+void gf2x_red_avx2_two(OUT pad_r_t_two *c, IN const dbl_pad_r_t_two *a);
+void gf2x_red_avx512_two(OUT pad_r_t_two *c, IN const dbl_pad_r_t_two *a);
+
 #endif
 
 // GF2X methods struct
@@ -149,6 +159,11 @@ void gf2x_mod_mul_with_ctx(OUT pad_r_t *c,
                            IN const pad_r_t *a,
                            IN const pad_r_t *b,
                            IN const gf2x_ctx *ctx);
+
+void gf2x_mod_mul_with_ctx_two(OUT pad_r_t_two *c,
+                           IN const pad_r_t_two *a,
+                           IN const pad_r_t_two *b,
+                           IN const gf2x_ctx_two *ctx);
 
 _INLINE_ void gf2x_ctx_init(gf2x_ctx *ctx)
 {
@@ -215,23 +230,23 @@ _INLINE_ void gf2x_ctx_init_two(gf2x_ctx_two *ctx)
     ctx->karatzuba_add2 = karatzuba_add2_port;
     ctx->karatzuba_add3 = karatzuba_add3_port;
     ctx->k_sqr          = k_sqr_port_two;
-    ctx->red            = gf2x_red_port;
+    ctx->red            = gf2x_red_port_two;
   }
 
 #if defined(X86_64)
   if(is_vpclmul_enabled() && is_avx512_enabled()) {
     ctx->mul_base_qwords = GF2X_VPCLMUL_BASE_QWORDS;
     ctx->mul_base        = gf2x_mul_base_vpclmul;
-    ctx->sqr             = gf2x_sqr_vpclmul;
+    ctx->sqr             = gf2x_sqr_vpclmul_two;
   } else if(is_pclmul_enabled()) {
     ctx->mul_base_qwords = GF2X_PCLMUL_BASE_QWORDS;
     ctx->mul_base        = gf2x_mul_base_pclmul;
-    ctx->sqr             = gf2x_sqr_pclmul;
+    ctx->sqr             = gf2x_sqr_pclmul_two;
   } else
 #endif
   {
     ctx->mul_base_qwords = GF2X_PORT_BASE_QWORDS;
     ctx->mul_base        = gf2x_mul_base_port;
-    ctx->sqr             = gf2x_sqr_port;
+    ctx->sqr             = gf2x_sqr_port_two;
   }
 }

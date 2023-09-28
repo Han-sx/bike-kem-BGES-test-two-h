@@ -203,7 +203,7 @@ int crypto_kem_keypair(OUT unsigned char *pk, OUT unsigned char *sk)
 
 int crypto_kem_keypair_two(OUT unsigned char *pk, OUT unsigned char *sk)
 {
-  DEFER_CLEANUP(aligned_sk_t l_sk = {0}, sk_cleanup);
+  DEFER_CLEANUP(aligned_sk_t_two l_sk = {0}, sk_two_cleanup);
 
   // The secret key is (h0, h1),
   // and the public key h=(h0^-1 * h1).
@@ -227,7 +227,7 @@ int crypto_kem_keypair_two(OUT unsigned char *pk, OUT unsigned char *sk)
 
   // Calculate the public key
   gf2x_mod_inv_two(&h0inv, &h0);
-  gf2x_mod_mul(&h, &h1, &h0inv);
+  gf2x_mod_mul_two(&h, &h1, &h0inv);
 
   // Fill the secret key data structure with contents - cancel the padding
   l_sk.bin[0] = h0.val;
@@ -238,9 +238,9 @@ int crypto_kem_keypair_two(OUT unsigned char *pk, OUT unsigned char *sk)
   bike_memcpy(sk, &l_sk, sizeof(l_sk));
   bike_memcpy(pk, &l_sk.pk, sizeof(l_sk.pk));
 
-  print("h:  ", (uint64_t *)&l_sk.pk, R_BITS);
-  print("h0: ", (uint64_t *)&l_sk.bin[0], R_BITS);
-  print("h1: ", (uint64_t *)&l_sk.bin[1], R_BITS);
+  print("h:  ", (uint64_t *)&l_sk.pk, R_BITS_TWO);
+  print("h0: ", (uint64_t *)&l_sk.bin[0], R_BITS_TWO);
+  print("h1: ", (uint64_t *)&l_sk.bin[1], R_BITS_TWO);
   print("h0 wlist:", (uint64_t *)&l_sk.wlist[0], SIZEOF_BITS(compressed_idx_d_t));
   print("h1 wlist:", (uint64_t *)&l_sk.wlist[1], SIZEOF_BITS(compressed_idx_d_t));
   print("sigma: ", (uint64_t *)l_sk.sigma.raw, M_BITS);
