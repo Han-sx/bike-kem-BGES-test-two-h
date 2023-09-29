@@ -87,6 +87,8 @@ int main()
       continue;
     }
 
+    if(res_two){}
+
     uint32_t dec_rc = 0;
 
     // Encapsulate

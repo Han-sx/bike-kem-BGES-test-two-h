@@ -93,6 +93,7 @@ typedef struct sk_s_two {
 } sk_t_two;
 
 typedef ALIGN(sizeof(idx_t)) sk_t aligned_sk_t;
+typedef ALIGN(sizeof(idx_t)) sk_t_two aligned_sk_t_two;
 
 // Pad r to the next Block
 typedef struct pad_r_s {
