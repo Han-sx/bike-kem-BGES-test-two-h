@@ -93,7 +93,7 @@ int main()
 
     // Encapsulate
     // 此部分需要增加辅助密钥加密，输出 ct 和 辅助密文 ct_a
-    MEASURE("  encaps", res = crypto_kem_enc(ct.val, k_enc.val, pk.val););
+    MEASURE("  encaps", res = crypto_kem_enc(ct.val, ct_two.val, k_enc.val, pk.val, pk_two.val););
     if(res != 0) {
       printf("encapsulate failed with error: %d\n", res);
       continue;

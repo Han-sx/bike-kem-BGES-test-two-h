@@ -119,6 +119,10 @@ typedef struct pad_e_s {
   pad_r_t val[N0];
 } ALIGN(ALIGN_BYTES) pad_e_t;
 
+typedef struct pad_e_s_two {
+  pad_r_t_two val[N0];
+} ALIGN(ALIGN_BYTES) pad_e_t_two;
+
 #define PE0_RAW(e) ((e)->val[0].val.raw)
 #define PE1_RAW(e) ((e)->val[1].val.raw)
 

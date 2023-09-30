@@ -20,9 +20,11 @@ int crypto_kem_keypair_two(OUT unsigned char *pk, OUT unsigned char *sk);
 // Encapsulate - pk is the public key,
 //               ct is a key encapsulation message (ciphertext),
 //               ss is the shared secret.
-int crypto_kem_enc(OUT unsigned char *     ct,
-                   OUT unsigned char *     ss,
-                   IN const unsigned char *pk);
+int crypto_kem_enc(OUT unsigned char      *ct,
+                   OUT unsigned char      *ct_two,
+                   OUT unsigned char      *ss,
+                   IN const unsigned char *pk,
+                   IN const unsigned char *pk_two)
 
 // Decapsulate - ct is a key encapsulation message (ciphertext),
 //               sk is the private key,
