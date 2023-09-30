@@ -43,7 +43,7 @@ _INLINE_ ret_t function_h(OUT pad_e_t *e, IN const m_t *m, IN const pk_t *pk)
   DEFER_CLEANUP(seed_t seed = {0}, seed_cleanup);
 
 #if defined(BIND_PK_AND_M)
-  DEFER_CLEANUP(sha_dgst_t  dgst = {0}, sha_dgst_cleanup);
+  DEFER_CLEANUP(sha_dgst_t dgst = {0}, sha_dgst_cleanup);
   DEFER_CLEANUP(pk_m_bind_t pk_m = {0}, pk_m_bind_cleanup);
 
   // Coppy the public key and the message to a temporary buffer
@@ -104,10 +104,10 @@ _INLINE_ ret_t function_k(OUT ss_t *out, IN const m_t *m, IN const ct_t *ct)
   return SUCCESS;
 }
 
-_INLINE_ ret_t encrypt(OUT ct_t *ct,
+_INLINE_ ret_t encrypt(OUT ct_t         *ct,
                        IN const pad_e_t *e,
-                       IN const pk_t *pk,
-                       IN const m_t *m)
+                       IN const pk_t    *pk,
+                       IN const m_t     *m)
 {
   // Pad the public key and the ciphertext
   pad_r_t p_ct = {0};
@@ -171,8 +171,7 @@ int crypto_kem_keypair(OUT unsigned char *pk, OUT unsigned char *sk)
   DEFER_CLEANUP(seeds_t seeds = {0}, seeds_cleanup);
 
   get_seeds(&seeds);
-  GUARD(generate_secret_key(&h0, &h1,
-                            l_sk.wlist[0].val, l_sk.wlist[1].val,
+  GUARD(generate_secret_key(&h0, &h1, l_sk.wlist[0].val, l_sk.wlist[1].val,
                             &seeds.seed[0]));
 
   // Generate sigma
@@ -218,9 +217,8 @@ int crypto_kem_keypair_two(OUT unsigned char *pk, OUT unsigned char *sk)
   DEFER_CLEANUP(seeds_t seeds = {0}, seeds_cleanup);
 
   get_seeds(&seeds);
-  GUARD(generate_secret_key_two(&h0, &h1,
-                            l_sk.wlist[0].val, l_sk.wlist[1].val,
-                            &seeds.seed[0]));
+  GUARD(generate_secret_key_two(&h0, &h1, l_sk.wlist[0].val, l_sk.wlist[1].val,
+                                &seeds.seed[0]));
 
   // Generate sigma
   convert_seed_to_m_type(&l_sk.sigma, &seeds.seed[1]);
@@ -251,22 +249,30 @@ int crypto_kem_keypair_two(OUT unsigned char *pk, OUT unsigned char *sk)
 // Encapsulate - pk is the public key,
 //               ct is a key encapsulation message (ciphertext),
 //               ss is the shared secret.
-int crypto_kem_enc(OUT unsigned char *     ct,
-                   OUT unsigned char *     ss,
-                   IN const unsigned char *pk)
+int crypto_kem_enc(OUT unsigned char      *ct,
+                   OUT unsigned char      *ct_two,
+                   OUT unsigned char      *ss,
+                   IN const unsigned char *pk,
+                   IN const unsigned char *pk_two)
 {
   // Public values (they do not require cleanup on exit).
   pk_t l_pk;
   ct_t l_ct;
+  pk_t_two l_pk_two;
+  ct_t_two l_ct_two;
 
   DEFER_CLEANUP(m_t m, m_cleanup);
   DEFER_CLEANUP(ss_t l_ss, ss_cleanup);
   DEFER_CLEANUP(seeds_t seeds = {0}, seeds_cleanup);
   DEFER_CLEANUP(pad_e_t e, pad_e_cleanup);
 
+  DEFER_CLEANUP(pad_e_t_two e_two, pad_e_two_cleanup);
+
   // Copy the data from the input buffer. This is required in order to avoid
   // alignment issues on non x86_64 processors.
   bike_memcpy(&l_pk, pk, sizeof(l_pk));
+
+  bike_memcpy(&l_pk_two, pk_two, sizeof(l_pk_two));
 
   get_seeds(&seeds);
 
@@ -276,6 +282,7 @@ int crypto_kem_enc(OUT unsigned char *     ct,
 
   // Calculate the ciphertext
   GUARD(encrypt(&l_ct, &e, &l_pk, &m));
+  // TODO 计算 e_two 为部分值
 
   // Generate the shared secret
   GUARD(function_k(&l_ss, &m, &l_ct));
@@ -292,10 +299,10 @@ int crypto_kem_enc(OUT unsigned char *     ct,
 // Decapsulate - ct is a key encapsulation message (ciphertext),
 //               sk is the private key,
 //               ss is the shared secret
-int crypto_kem_dec(OUT unsigned char *     ss,
+int crypto_kem_dec(OUT unsigned char      *ss,
                    IN const unsigned char *ct,
                    IN const unsigned char *sk,
-                   IN uint32_t *x_count)
+                   IN uint32_t            *x_count)
 {
   // Public values, does not require a cleanup on exit
   ct_t l_ct;
