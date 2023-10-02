@@ -282,7 +282,10 @@ int crypto_kem_enc(OUT unsigned char      *ct,
 
   // Calculate the ciphertext
   GUARD(encrypt(&l_ct, &e, &l_pk, &m));
+
+
   // TODO 计算 e_two 为部分值
+  // 拷贝 e_two 为 e 的前部分值
 
   // Generate the shared secret
   GUARD(function_k(&l_ss, &m, &l_ct));
