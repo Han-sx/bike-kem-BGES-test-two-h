@@ -83,6 +83,24 @@ _INLINE_ ret_t function_l(OUT m_t *out, IN const pad_e_t *e)
   return SUCCESS;
 }
 
+_INLINE_ ret_t function_l_two(OUT m_t *out, IN const pad_e_t_two *e)
+{
+  DEFER_CLEANUP(sha_dgst_t dgst = {0}, sha_dgst_cleanup);
+  DEFER_CLEANUP(e_t_two tmp, e_two_cleanup);
+
+  // Take the padding away
+  tmp.val[0] = e->val[0].val;
+  tmp.val[1] = e->val[1].val;
+
+  GUARD(sha(&dgst, sizeof(tmp), (uint8_t *)&tmp));
+
+  // Truncate the SHA384 digest to a 256-bits m_t
+  bike_static_assert(sizeof(dgst) >= sizeof(*out), dgst_size_lt_m_size);
+  bike_memcpy(out->raw, dgst.u.raw, sizeof(*out));
+
+  return SUCCESS;
+}
+
 // Generate the Shared Secret K(m, c0, c1)
 _INLINE_ ret_t function_k(OUT ss_t *out, IN const m_t *m, IN const ct_t *ct)
 {
@@ -132,6 +150,39 @@ _INLINE_ ret_t encrypt(OUT ct_t         *ct,
   print("e0: ", (const uint64_t *)PE0_RAW(e), R_BITS);
   print("e1: ", (const uint64_t *)PE1_RAW(e), R_BITS);
   print("c0:  ", (uint64_t *)ct->c0.raw, R_BITS);
+  print("c1:  ", (uint64_t *)ct->c1.raw, M_BITS);
+
+  return SUCCESS;
+}
+
+_INLINE_ ret_t encrypt_two(OUT ct_t_two         *ct,
+                           IN const pad_e_t_two *e,
+                           IN const pk_t_two    *pk,
+                           IN const m_t         *m)
+{
+  // Pad the public key and the ciphertext
+  pad_r_t_two p_ct = {0};
+  pad_r_t_two p_pk = {0};
+  p_pk.val     = *pk;
+
+  // Generate the ciphertext
+  // ct = pk * e1 + e0
+  gf2x_mod_mul_two(&p_ct, &e->val[1], &p_pk);
+  gf2x_mod_add_two(&p_ct, &p_ct, &e->val[0]);
+
+  ct->c0 = p_ct.val;
+
+  // c1 = L(e0, e1)
+  GUARD(function_l_two(&ct->c1, e));
+
+  // m xor L(e0, e1)
+  for(size_t i = 0; i < sizeof(*m); i++) {
+    ct->c1.raw[i] ^= m->raw[i];
+  }
+
+  print("e0: ", (const uint64_t *)PE0_RAW(e), R_BITS_TWO);
+  print("e1: ", (const uint64_t *)PE1_RAW(e), R_BITS_TWO);
+  print("c0:  ", (uint64_t *)ct->c0.raw, R_BITS_TWO);
   print("c1:  ", (uint64_t *)ct->c1.raw, M_BITS);
 
   return SUCCESS;
@@ -256,8 +307,8 @@ int crypto_kem_enc(OUT unsigned char      *ct,
                    IN const unsigned char *pk_two)
 {
   // Public values (they do not require cleanup on exit).
-  pk_t l_pk;
-  ct_t l_ct;
+  pk_t     l_pk;
+  ct_t     l_ct;
   pk_t_two l_pk_two;
   ct_t_two l_ct_two;
 
@@ -283,9 +334,10 @@ int crypto_kem_enc(OUT unsigned char      *ct,
   // Calculate the ciphertext
   GUARD(encrypt(&l_ct, &e, &l_pk, &m));
 
-
   // TODO 计算 e_two 为部分值
   // 拷贝 e_two 为 e 的前部分值
+
+  GUARD(encrypt_two(&l_ct_two, &e_two, &l_pk_two, &m));
 
   // Generate the shared secret
   GUARD(function_k(&l_ss, &m, &l_ct));
