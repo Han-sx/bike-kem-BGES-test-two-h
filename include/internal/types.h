@@ -48,6 +48,10 @@ typedef struct e_s {
   r_t val[N0];
 } e_t;
 
+typedef struct e_s_two {
+  r_t_two val[N0];
+} e_t_two;
+
 #define E0_RAW(e) ((e)->val[0].raw)
 #define E1_RAW(e) ((e)->val[1].raw)
 
